@@ -111,6 +111,7 @@ Example:
   },
   "settings": {
     "layout": {
+      "type": "image_overlay",
       "color_one": "ffffff",
       "color_background": "000000"
     },
@@ -152,6 +153,7 @@ Example:
 
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
+| type | string | true | One of "single_color, gradient, image_overlay" |
 | color_one | string | false | Hexadecimal representation of any color used to fill the QR Code eyes and modules |
 | color_background | string | false | Hexadecimal representation of any color used to fill the background |
 
@@ -264,6 +266,7 @@ Example
   },
   "settings": {
     "layout": {
+      "type": "image_overlay",
       "color_one": "ffffff",
       "color_background": "000000"
     },
