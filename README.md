@@ -81,6 +81,10 @@ Each of those counters are reset every day at midnight (00:00am GMT)
 
 The Sandbox environment is currently running as a closed beta platform. Please contact our Support Team (support@email.unitag.io) in order to gain access to it and receive your credentials.
 
+You can then call Unitag API endpoints by adding your API key as a header to the request such as:
+
+```X-Unitag-ApiKey=<API-Key>```
+
 ### Environments
 
 Upon creating your key you will have to choose the targeted environment accordingly. Environments are isolated, meaning that any asset created in one will not be duplicated or accessible to/from another environment.
