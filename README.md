@@ -24,6 +24,17 @@ REST API
 
 https://api-v2.sandbox.unitag.io
 
+## Content
+
+* [QR codes](#qr-codes)
+  * [Preview a QR code](#preview-a-qr-code-design)
+  * [Create a QR code](#create-a-qr-code)
+  * [Retrieve a QR code](#retrieve-a-qr-code)
+  * [Retrieve all QR codes](#retrieve-all-qr-codes)
+  * [Update a QR code URL](#update-a-qr-code-destination-url)
+* [Filters](#filters)
+  * [Create a Filter](#create-a-filter)
+  * [Retrieve all Filters](#retrieve-filters-for-a-qr-code)
 
 ## API
 
@@ -95,11 +106,11 @@ Upon creating your key you will have to choose the targeted environment accordin
 
 Create a QR Code Preview for the profile of the API Key
 
-**HTTP Request**
+**HTTP request**
 
 `POST /qrcode/preview`
 
-**Request Fields**
+**Request fields**
 
 Example:
 ```json
@@ -243,18 +254,16 @@ Content-Type: image/png
 
 The preview image of the resulted QR Code
 
-## Create a QR Code
+---
+### Create a QR Code
 
 Create a QR Code Preview for the profile of the API Key
 
-> Attention:  
-> If used in production you will need to provision your account with Credits in order to create a QR Code
-
-**HTTP Request**
+**HTTP request**
 
 `POST /qrcode`
 
-**Request Fields**
+**Request fields**
 
 Example
 ```json
@@ -306,7 +315,7 @@ Example
 
 For more details about the settings object please refer to the *Settings* object in the **QRCode Preview** section
 
-**Response Fields**
+**Response fields**
 
 Example
 
@@ -326,6 +335,103 @@ Example
 | content_url | string | Resolution URL, your own domain name if resolution is set to "dynamic-pro" |
 | qr_code_image_url | string | QR Code image available from our CDN |
 
+---
+
+### Retrieve a QR Code
+
+Retrieve a QR Code via its ID
+
+**HTTP request**
+
+```GET /qrcode/<qrcode_id>```
+
+---
+
+### Retrieve all QR Codes
+
+Retrieve all QR Codes associated with the account
+
+**HTTP request**
+
+```GET /qrcodes```
+
+---
+
+### Update a QR Code destination URL
+
+Update the destination URL of a QR Code
+
+> This request is only available for Dynamic and Dynamic Pro QR Codes
+
+**HTTP request**
+
+```PUT /qrcode/<qrcode_id>/url```
+
+**Request fields**
+
+Example 
+
+```
+{
+    "url": "https://unitag.io/features"
+}
+```
+
+*Data* object:
+
+| field | type | mandatory | description |  
+| --- | --- | --- | --- |  
+| url | string | true | The final URL of your QR Code |
+
+---
+
+## Filters
+
+> NB: Filters are only available for Dynamic and Dynamic Pro QR Codes
+
+Filters are a way to redirect your users based on certain conditions. Those conditions are evaluated upon scanning a QR Code. If those conditions are fulfilled the filter will be triggered
+
+Filters available:
+* Language based
+* Device based
+* Location based (module required)
+* Time based (module required)
+* Combination of all the above
+
+### Create a Filter
+
+**HTTP request**
+
+```POST /qrcode/<qrcode_id>/filter```
+
+**Request fields**
+
+Example
+
+In this example we are creating a language filter which is read as followed:
+If an english speaker scans this QR Code it will be redirected to https://www.unitag.io/welcome
+
+```
+{
+    "final_url": "https://www.unitag.io/welcome",
+    "statements": [
+        {
+            "type": "language",
+            "value": "en"
+        }
+    ]
+}
+```
+
+---
+
+### Retrieve filters for a QR Code
+
+**HTTP request**
+
+```GET /qrcode/<qrcode_id>/filters```
+
+---
 
 
 
