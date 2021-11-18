@@ -35,6 +35,9 @@ https://api-v2.sandbox.unitag.io
 * [Filters](#filters)
   * [Create a Filter](#create-a-filter)
   * [Retrieve all Filters](#retrieve-filters-for-a-qr-code)
+* [Domain names](#domain-names)
+  * [Register a Domain](#register-a-domain-name)
+  * [Validate a Domain](#validate-a-domain-name)
 
 ## API
 
@@ -433,5 +436,99 @@ If an english speaker scans this QR Code it will be redirected to https://www.un
 
 ---
 
+## Domain Names
+
+Domain names allows to use your own domain name in your QR code for Dynamic Pro QR codes
+
+> NB: Custom domain names are available from Gold subscription and upwards
+
+### Register a domain name
+
+Registering a domain name is the first operation in order to use your custom domain name with Unitag Resolver engine
+
+Supported domain names examples:
+* APEX (eg: example.org)
+* SUBDOMAIN (eg: **qr**.example.org, **www**.example.org, **foo**.example.org)
+
+**Request**
+
+```POST /domains```
+
+Example
+
+```
+{
+    "domain_name": "example.org"
+}
+```
+
+*Data* object:
+
+| field | type | mandatory | description |  
+| --- | --- | --- | --- |  
+| domain_name | string | true | Domain name that you want to register with us|
+
+
+**Response**
+
+```
+{
+    "type": "APEX",
+    "requested_domain": "example.org",
+    "domain_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "fqdn": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6.qrcode.link",
+    "ip": "1.2.3.4"
+}
+```
+
+*Data* object:
+
+| field | type  | description |  
+| --- | --- | --- |  
+| type | string | Either APEX or SUBDOMAIN based on the given domain |
+| requested_domain | string | The domain you have submitted |
+| domain_uuid | string | The UUID of your domain |
+| fqdn | string | If SUBDOMAIN - Fully Qualified Domain Name - For registration purposes |
+| ip | string | If APEX - IP address - For registration purposes |
+
+Once you have received the response from the API you need to update your domain name with your registrar
+
+If your domain name is an APEX you will need to create an A record such as:  
+```example.org A 1.2.3.4```
+
+If your domain name is a SUBDOMAIN you will need to create a CNAME record such as:   
+```foo.example.org CNAME f81d4fae-7dec-11d0-a765-00a0c91e6bf6.qrcode.link.```
+
+> NB: If you are registering a SUBDOMAIN please make sure to add a dot (.) at the end of the CNAME entry
+
+---
+
+### Validate a domain name
+
+Once your domain has been registered with us you need to update your domain with your registrar (eg: Gandi, Google, OVH). Once done you will be able to finalize the registration of your domain by validating your configuration against our API
+
+**Request**
+
+```GET /domain/<domain_id>/check```
+
+**Response**
+
+HTTP code 200
+
+```
+{
+    "domain_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+}
+```
+
+HTTP code 409
+
+```
+{
+    "message": "The current entry does not resolves to a Unitag domain name, please make sure your DNS zone is correctly configured"
+}
+```
+
+---
 
 
