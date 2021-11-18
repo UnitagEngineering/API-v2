@@ -38,6 +38,8 @@ https://api-v2.sandbox.unitag.io
 * [Domain names](#domain-names)
   * [Register a Domain](#register-a-domain-name)
   * [Validate a Domain](#validate-a-domain-name)
+* [Analytics](#analytics)
+  * [Retrieve QR Codes statistics](#retrieve-qr-codes-aggregated-stats)
 
 ## API
 
