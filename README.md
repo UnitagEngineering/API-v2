@@ -276,7 +276,8 @@ Example
   "data": {
     "type": "url",
     "resolution": "dynamic",
-    "url": "https://example.com/my-page"
+    "url": "https://example.com/my-page",
+    "label": "My first QR code"
   },
   "settings": {
     "layout": {
@@ -315,6 +316,7 @@ Example
 | type | string | true | Type of QR Code, one of "url, vcard" |  
 | resolution | string | true | Resoluton of your QR Code, one of "dynamic, dynamic-pro, legacy" 
 | url | string | true | Final URL to which your QR Code should redirect to upon scanning |
+| label | string | false | Name for your QR code |
 
 *Settings* object:
 
@@ -327,18 +329,18 @@ Example
 ```json
 {
   "status": "created",
-  "qrcode_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "qrcode_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
   "content_url": "https://qrcode.link/a/f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
   "qr_code_image_url": "https://cdn-public.unitag.io/aaaaaaa-7dec-11d0-a765-00a0c91e6bf6/f81d4fae-7dec-11d0-a765-00a0c91e6bf6.png"
 }
 ```
 
-| field | type | description |
-| --- | --- | --- |
-| status | string | Status of the QR Code, one of "created, updated" |
-| qrcode_uuid | string | UUID of the QR Code created |
+| field | type | description                                                                |
+| --- | --- |----------------------------------------------------------------------------|
+| status | string | Status of the QR Code, one of "created, updated"                           |
+| qrcode_id | string | ID of the QR Code created                                                  |
 | content_url | string | Resolution URL, your own domain name if resolution is set to "dynamic-pro" |
-| qr_code_image_url | string | QR Code image available from our CDN |
+| qr_code_image_url | string | QR Code image available from our CDN                                       |
 
 ---
 
