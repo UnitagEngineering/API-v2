@@ -430,6 +430,64 @@ If an english speaker scans this QR Code it will be redirected to https://www.un
 }
 ```
 
+**Details**
+
+*Filter* object:
+
+| field      | type               | mandatory | description                                                     |  
+|------------|--------------------| --- |-----------------------------------------------------------------|  
+| final_url  | string             | true | The destination URL used if the filter statements are fulfilled |
+| statements | Array of Statement | true | List of Statements for the filter                               | 
+
+*Statement* object:
+
+| field | type | mandatory | description                                                                            |  
+|-------| --- | --- |----------------------------------------------------------------------------------------|  
+| type  | string | true | Type of Statement, one of "device, language, location_country, location_precise, time" |  
+| value | string | true | Refer to next paragraph for formats specifications |                       
+
+**Statement values format**
+
+*device type Statement*
+
+Supported values: "blackberry", "iphone", "ipad", "windows_phone",
+"windows_tablet", "windows_computer", "apple_computer", "android_phone", "android_tablet"
+
+```json
+# Device statement example
+
+{
+  "type": "device",
+  "value": "iphone"
+}
+```
+
+*language type Statement*
+
+Supported values: Any Alpha-2 code part of ISO 639 -- [Wikipedia Source](https://en.wikipedia.org/wiki/ISO_639-1)
+
+```json
+# Language statement example
+
+{
+  "type": "language",
+  "value": "en"
+}
+```
+
+*location_country type Statement*
+
+Supported values: Any Alpha-2 code part of ISO 3166 -- [ISO Search](https://www.iso.org/obp/ui/#search/code/)
+
+```json
+# Language statement example
+
+{
+  "type": "language",
+  "value": "US"
+}
+```
+
 ---
 
 ### Retrieve filters for a QR Code
