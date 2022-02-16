@@ -454,8 +454,6 @@ Supported values: "blackberry", "iphone", "ipad", "windows_phone",
 "windows_tablet", "windows_computer", "apple_computer", "android_phone", "android_tablet"
 
 ```json
-# Device statement example
-
 {
   "type": "device",
   "value": "iphone"
@@ -467,8 +465,6 @@ Supported values: "blackberry", "iphone", "ipad", "windows_phone",
 Supported values: Any Alpha-2 code part of ISO 639 -- [Wikipedia Source](https://en.wikipedia.org/wiki/ISO_639-1)
 
 ```json
-# Language statement example
-
 {
   "type": "language",
   "value": "en"
@@ -480,8 +476,6 @@ Supported values: Any Alpha-2 code part of ISO 639 -- [Wikipedia Source](https:/
 Supported values: Any Alpha-2 code part of ISO 3166 -- [ISO Search](https://www.iso.org/obp/ui/#search/code/)
 
 ```json
-# Language statement example
-
 {
   "type": "language",
   "value": "US"
