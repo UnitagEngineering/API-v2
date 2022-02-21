@@ -160,7 +160,7 @@ Example:
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
 | type | string | true | Type of QR Code, one of "url, vcard" |  
-| resolution | string | true | Resoluton of your QR Code, one of "dynamic, dynamic-pro, legacy" 
+| resolution | string | true | Resoluton of your QR Code, one of "dynamic, dynamic-pro, static" 
 | url | string | true | Final URL to which your QR Code should redirect to upon scanning |
 
 *Settings* object:
