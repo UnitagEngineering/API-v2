@@ -29,6 +29,7 @@ https://api-v2.sandbox.unitag.io
 * [QR codes](#qr-codes)
   * [Preview a QR code](#preview-a-qr-code-design)
   * [Create a QR code](#create-a-qr-code)
+  * [Download a QR code](#download-a-qr-code)
   * [Retrieve a QR code](#retrieve-a-qr-code)
   * [Retrieve all QR codes](#retrieve-all-qr-codes)
   * [Update a QR code URL](#update-a-qr-code-destination-url)
@@ -341,6 +342,58 @@ Example
 | qrcode_id | string | ID of the QR Code created                                                  |
 | content_url | string | Resolution URL, your own domain name if resolution is set to "dynamic-pro" |
 | qr_code_image_url | string | QR Code image available from our CDN                                       |
+
+---
+
+### Download a QR Code
+
+Download a QR Code in multiple formats
+
+**HTTP request**
+
+```
+POST /asset/download/qrcode
+```
+
+**Request fields**
+
+Example single download
+
+```json
+{
+  "asset_uuid": "<qrcode_id>",
+  "format": "png",
+  "size": 300,
+  "unit": "px"
+}
+```
+
+Example batch download
+
+```json
+{
+  "qrcode_ids": ["<qrcode_id_1>", "<qrcode_id_2>", "<qrcode_id_3>"],
+  "format": "png",
+  "size": 300,
+  "unit": "px"
+}
+```
+
+*Data* object
+
+| field      | type            | mandatory                 | description                |  
+|------------|-----------------|---------------------------|----------------------------|  
+| asset_uuid | string          | true (if single download) | Asset ID to be downloaded  |
+| qrcode_ids | Array of string | true (if batch download)  | Assets ID to be downloaded |
+| format | string | true | Desired output format, one of "png", "svg", "jpeg", "pdf" |
+| size | number | true | Desired output size, range between 100 and 1500 |
+| unit | string | true | Desire output unit, one of "px", "mm" |
+
+**Response**
+
+If a single download has been created, you will receive a binary output matching your request representing the image of your asset
+
+If a batch download has been created, you will obtain a compressed archive, a zip file containing all your assets
 
 ---
 
