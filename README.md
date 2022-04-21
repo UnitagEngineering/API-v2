@@ -308,16 +308,31 @@ Example
 }
 ```
 
+Example of data payload with Dynamic Pro
+
+```json
+{
+  "data": {
+    "type": "url",
+    "resolution": "dynamic-pro",
+    "domain_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "url": "https://example.com/my-page",
+    "[...]": "[...]"
+  }
+}
+```
+
 **Details**
 
 *Data* object:
 
-| field | type | mandatory | description |  
-| --- | --- | --- | --- |  
-| type | string | true | Type of QR Code, one of "url, vcard" |  
-| resolution | string | true | Resoluton of your QR Code, one of "dynamic, dynamic-pro, static" 
-| url | string | true | Final URL to which your QR Code should redirect to upon scanning |
-| label | string | false | Name for your QR code |
+| field      | type | mandatory | description                                                     |  
+|------------| --- | --- |-----------------------------------------------------------------|  
+| type       | string | true | Type of QR Code, one of "url, vcard"                            |  
+| resolution | string | true | Resoluton of your QR Code, one of "dynamic, dynamic-pro, static" |
+| domain_id  | string | true | Mandatory if resolution type is "dynamic-pro"                   | 
+| url        | string | true | Final URL to which your QR Code should redirect to upon scanning |
+| label      | string | false | Name for your QR code                                           |
 
 *Settings* object:
 
@@ -618,7 +633,7 @@ Once your domain has been registered with us you need to update your domain with
 
 **Request**
 
-```GET /domain/<domain_id>/check```
+```GET /domains/<domain_id>/check```
 
 **Response**
 
@@ -637,6 +652,44 @@ HTTP code 409
   "message": "The current entry does not resolves to a Unitag domain name, please make sure your DNS zone is correctly configured"
 }
 ```
+
+---
+
+### List all domain names available
+
+Retrieve the list of domain available for the account
+
+**Request**
+
+```GET /domains```
+
+**Response**
+
+HTTP code 200
+
+NB: As an owner of a domain name more fields might be added if you have shared the domain across accounts
+
+```json
+[
+  {
+    "domain_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "domain_name": "example.org",
+    "ssl_activated": true,
+    "activated": true,
+    "status": ""
+  }  
+]
+```
+
+*Data* []object:
+
+| field         | type  | description                    |  
+|---------------| --- |--------------------------------|  
+| domain_id     | string | The ID of the domain           |
+| domain_name   | string | The domain name as string      |
+| ssl_activated | string | Status of the SSL service      |
+| activated     | string | Status of the domain name      |
+| status        | string | Used for deactivation purposes |
 
 ---
 
