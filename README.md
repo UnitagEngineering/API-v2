@@ -368,7 +368,7 @@ Download a QR Code in multiple formats
 **HTTP request**
 
 ```
-POST /asset/download/qrcode
+POST /asset/download/qrcode_bundle
 ```
 
 **Request fields**
@@ -382,6 +382,12 @@ Example single download
   "size": 300,
   "unit": "px"
 }
+```
+
+### Download multiple QR Codes
+
+```
+POST /asset/download/export
 ```
 
 Example batch download
