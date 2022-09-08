@@ -29,6 +29,7 @@ https://api-v2.sandbox.unitag.io
 * [QR codes](#qr-codes)
   * [Preview a QR code](#preview-a-qr-code-design)
   * [Create a QR code](#create-a-qr-code)
+  * [Get and add a QR code template](#retrieve-qr-code-templates)
   * [Download a QR code](#download-a-qr-code)
   * [Retrieve a QR code](#retrieve-a-qr-code)
   * [Retrieve all QR codes](#retrieve-all-qr-codes)
@@ -376,6 +377,31 @@ Example
 | qr_code_image_url | string | QR Code image available from our CDN                                       |
 
 ---
+
+### Retrieve QR Code templates
+
+To retrieve the list of existing template:
+
+**HTTP request**
+
+```
+GET /qrcodes/templates
+```
+
+When creating a QR code using a template design, pass the UUID of the template to the POST create QR Code request
+
+```json
+{
+    "settings": {
+        ...
+        "redundancy": "H",
+        "template_id": "c7a5dc7c-4bcb-435d-a5a3-b21658189f7a"
+    },
+    "data": {
+        ...
+    }
+}
+```
 
 ### Download a QR Code
 
