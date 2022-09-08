@@ -12,9 +12,9 @@ Our services are hosted in Amazon Ireland (eu-west-1) and OVH France
 
 ### Sandbox
 
-A public sandbox is available for testing the generation of QR Codes. In this environment you are limited to 1000 calls per day, if additional operations are needed please contact our support at support@email.unitag.io. In addition any QR Code created will be deleted after 6 months, upon scanning they will return an HTTP 404 from our resolvers.
+A public sandbox is available for testing the generation of QR Codes. In this environment you are limited to 1000 calls per day, if additional operations are needed please contact our support at support@email.unitag.io. In addition, any QR Code created will be deleted after 6 months, upon scanning they will return an HTTP 404 from our resolvers.
 
-Those limitations reset everyday at midnight (00:00am) GMT
+Those limitations reset every day at midnight (00:00am) GMT
 
 #### Sandbox URLs
 
@@ -97,7 +97,8 @@ Each of those counters are reset every day at midnight (00:00am GMT)
 
 ### Generating an API Key
 
-The Sandbox environment is currently running as a closed beta platform. Please contact our Support Team (support@email.unitag.io) in order to gain access to it and receive your credentials.
+You can generate an API key from https://console.sandbox.unitag.io/settings section API.
+In case of issue, please contact our Support Team (via the support button in your dashboard) in order to gain access to it and receive your credentials.
 
 You can then call Unitag API endpoints by adding your API key as a header to the request such as:
 
@@ -123,34 +124,48 @@ Example:
 ```json
 {
   "data": {
-    "type": "url",
+    "type": "URL",
     "resolution": "dynamic",
-    "url": "https://example.com/my-page"
+    "url": "https://unitag.io"
   },
   "settings": {
-    "layout": {
-      "type": "image_overlay",
-      "color_one": "ffffff",
-      "color_background": "000000"
-    },
+    "template_id": "",
+    "redundancy": "M",
     "eyes": {
-      "type": "simple"
+      "type": "curved",
+      "color_ext_top_left": "",
+      "color_ext_top_right": "",
+      "color_ext_bottom_left": "",
+      "color_int_bottom_left": "",
+      "color_int_top_right": "",
+      "color_int_top_left": ""
     },
-    "modules": {
-      "type": "simple"
-    },
-    "background": {
-      "url": "https://example.com/my-asset.png",
-      "brightness": 0.5,
-      "contrast": 0.5
+    "layout": {
+      "gradient_type": "vertical",
+      "type": "gradient",
+      "color_background": "#ffffff",
+      "color_one": "#53c1a6",
+      "color_two": "#c9285a",
+      "color_shadow": "#bdbdbd",
+      "force_shadow": "none"
     },
     "logo": {
       "excavate": false,
+      "url": "",
+      "width": 0,
       "x": 0,
+      "x_norm": 0,
       "y": 0,
-      "width": 20,
-      "url": "https://example.com/my-logo.png"
-    } 
+      "y_norm": 0
+    },
+    "background": {
+      "url": "",
+      "contrast": 0,
+      "brightness": 0
+    },
+    "modules": {
+      "type": "simple"
+    }
   }
 }
 ```
@@ -283,9 +298,10 @@ Example
   },
   "settings": {
     "layout": {
+      "gradient_type": "",
       "type": "image_overlay",
-      "color_one": "ffffff",
-      "color_background": "000000"
+      "color_background": "#ffffff",
+      "force_shadow": "none"
     },
     "eyes": {
       "type": "simple"
@@ -715,13 +731,26 @@ Unitag pre aggregates data in order to offload calculations for you
 Example
 
 The following query reads as:
-* Get all stats from 2 weeks ago to now
+* Get all stats from 2 weeks ago to now (type: 1 relate to a relative time search )
 
 ```json
 {
   "time_range": {
+    "type": 1,
     "number": 2,
     "unit": "weeks"
+  }
+}
+```
+
+* Get all stats for an absolute date range (type 0)
+
+```json
+{
+  "time_range": {
+    "type": 0,
+    "start_date": "2022-07-31T23:00:00.000Z",
+    "end_date": "2022-09-01T23:00:00.000Z"
   }
 }
 ```
