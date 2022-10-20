@@ -12,7 +12,7 @@ Our services are hosted in Amazon Ireland (eu-west-1) and OVH France
 
 ### Sandbox
 
-A public sandbox is available for testing the generation of QR Codes. In this environment you are limited to 1000 calls per day, if additional operations are needed please contact our support at support@email.unitag.io. In addition, any QR Code created will be deleted after 6 months, upon scanning they will return an HTTP 404 from our resolvers.
+A public sandbox is available for testing the generation of QR Codes. In this environment you are limited to 1000 calls per day, if additional operations are needed please contact our support. In addition, any QR Code created will be deleted after 6 months, upon scanning they will return an HTTP 404 from our resolvers.
 
 Those limitations reset every day at midnight (00:00am) GMT
 
