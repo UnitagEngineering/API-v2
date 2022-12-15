@@ -781,6 +781,37 @@ The following query reads as:
 }
 ```
 
+* Get all stats for specifics qrcodes 
+
+```json
+{
+    "filters": [
+        {
+            "field": "QR Codes",
+            "operator": "",
+            "value": [
+                "6b8e573e-f5ca-4402-b300-3641ee9484c0",
+                "b229d8bc-92f6-4d88-a9d4-6e8adc7187ef",
+                "5a78c7d2-e5ab-4742-9093-10ff19e89bb5"
+            ],
+            "label": [
+                "Website_QR_Codes #2",
+                "Website QR Code #0",
+                "Website QR Codes #1",
+                ""
+            ]
+        }
+    ],
+    "time_range": {
+        "type": 1,
+        "number": 2,
+        "unit": "weeks",
+        "start_date": "",
+        "end_date": ""
+    }
+}
+```
+
 *Data* object:
 
 | field | type | mandatory | description |  
