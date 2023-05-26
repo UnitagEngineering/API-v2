@@ -41,6 +41,11 @@ https://api-v2.sandbox.unitag.io
   * [Register a Domain](#register-a-domain-name)
   * [Validate a Domain](#validate-a-domain-name)
   * [Retrieve domains](#list-all-domain-names-available)
+* [Campaigns](#campaigns)
+  * [Get list campaigns](#get-list-campaigns)
+  * [Create campaign](#create-campaign)
+  * [Create sub-campaign](#create-sub-campaign)
+  * [Delete campaign](#delete-campaign)
 * [Analytics](#analytics)
   * [Retrieve QR Codes statistics](#retrieve-qr-codes-aggregated-stats)
 
@@ -336,6 +341,48 @@ Example of data payload with Dynamic Pro
     "domain_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
     "url": "https://example.com/my-page",
     "[...]": "[...]"
+  }
+}
+```
+
+Example of data payload with a Campaign associated to the QR code at its creation
+
+```json
+{
+  "data": {
+    "type": "url",
+    "resolution": "dynamic",
+    "url": "https://example.com/my-page",
+    "label": "My first QR code",
+    "campaign": {
+      "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc"
+    }
+  },
+  "settings": {
+    "layout": {
+      "gradient_type": "",
+      "type": "image_overlay",
+      "color_background": "#ffffff",
+      "force_shadow": "none"
+    },
+    "eyes": {
+      "type": "simple"
+    },
+    "modules": {
+      "type": "simple"
+    },
+    "background": {
+      "url": "https://example.com/my-asset.png",
+      "brightness": 0.5,
+      "contrast": 0.5
+    },
+    "logo": {
+      "excavate": false,
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "url": "https://example.com/my-logo.png"
+    }
   }
 }
 ```
@@ -741,6 +788,175 @@ NB: As an owner of a domain name more fields might be added if you have shared t
 | status        | string | Used for deactivation purposes |
 
 ---
+
+## Campaigns
+
+The campaigns endpoint allows you to work around the campaign management tool, helping you to sort your QR codes.
+
+### Get list campaigns
+
+To retrieve the list of created campaigns and sub-campaigns
+
+**Request**
+```GET /qrcodes/campaigns```
+
+**Response**
+```json
+[
+    {
+        "uuid": "c2bd62df-3642-4a93-9754-aa68f65c6622",
+        "name": "HEALTHCHECK",
+        "color": "#673ab7",
+        "creation_date": "2021-02-23T22:31:29.32Z",
+        "sub_campaigns": [
+            {
+                "uuid": "0f877077-ac95-4e4c-b3af-5ad4fb8c1655",
+                "name": "health1",
+                "color": "orange",
+                "creation_date": "2021-02-23T22:31:29.32Z",
+                "sub_campaigns": null
+            }
+        ]
+    },
+    {
+        "uuid": "a88dc890-015f-4e93-8640-a65fd66646a6",
+        "name": "CAMPAIGN 1",
+        "color": "#2196f3",
+        "creation_date": "2021-02-24T13:51:35.127Z",
+        "sub_campaigns": null
+    },
+    {
+        "uuid": "e4a64ffe-e699-41c5-bd11-9d613db93e75",
+        "name": "CAMPAIGN 2",
+        "color": "orange",
+        "creation_date": "2021-02-24T13:51:35.619Z",
+        "sub_campaigns": [
+            {
+                "uuid": "d531061e-babe-476b-97da-65004bd616b4",
+                "name": "Sub Campaign 1",
+                "color": "#f44336",
+                "creation_date": "2021-02-24T13:51:35.619Z",
+                "sub_campaigns": null
+            },
+            {
+                "uuid": "150ad07c-5e46-4bb8-85ca-d0ae5fc9defb",
+                "name": "Sub Campaign 2",
+                "color": "#f44336",
+                "creation_date": "2021-02-24T13:51:35.619Z",
+                "sub_campaigns": null
+            }
+        ]
+    }
+]
+```
+
+### Create campaign
+
+**Request**
+
+```POST /qrcodes/campaign```
+
+* Payload example
+
+```json
+{"name":"Nouvelle Campagne","color":"blue"}
+```
+
+**Response**
+
+```json
+{
+  "ID": 0,
+  "CreatedAt": "2023-05-26T12:39:52.921Z",
+  "UpdatedAt": "2023-05-26T12:39:52.921Z",
+  "DeletedAt": null,
+  "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+  "name": "Nouvelle Campagne",
+  "color": "blue",
+  "UserID": 159,
+  "User": {
+    "id": 0,
+    "email": "",
+    "uuid": "",
+    "is_root_account": false,
+    "org": "",
+    "activated": false,
+    "deactivation_reason": "",
+    "Templates": null,
+    "account_type": "",
+    "renewal_date": null,
+    "account_role": "",
+    "organisation_role": "",
+    "legacy_id": 0
+  },
+  "ParentCampaign": null,
+  "ParentCampaignID": null,
+  "ChildCampaigns": null,
+  "LegacyID": 0
+}
+```
+
+### Create sub-campaign
+
+**Request**
+
+```POST /qrcodes/campaign```
+
+* Payload example
+
+uuid is the uuid of the parent's campaign
+
+```json
+{"uuid":"fd3180e2-e5e2-45ca-a8e5-b737627132bc","name":"Nouvelle sous-Campagne","color":"yellow"}
+```
+
+**Response**
+
+```json
+{
+  "ID": 0,
+  "CreatedAt": "2023-05-26T12:41:57.212Z",
+  "UpdatedAt": "2023-05-26T12:41:57.212Z",
+  "DeletedAt": null,
+  "uuid": "59016d6d-7e65-47e6-9eb8-296395a701b3",
+  "name": "Nouvelle sous-Campagne",
+  "color": "yellow",
+  "UserID": 159,
+  "User": {
+    "id": 0,
+    "email": "",
+    "uuid": "",
+    "is_root_account": false,
+    "org": "",
+    "activated": false,
+    "deactivation_reason": "",
+    "Templates": null,
+    "account_type": "",
+    "renewal_date": null,
+    "account_role": "",
+    "organisation_role": "",
+    "legacy_id": 0
+  },
+  "ParentCampaign": null,
+  "ParentCampaignID": 7063,
+  "ChildCampaigns": null,
+  "LegacyID": 0
+}
+```
+
+### Delete campaign
+
+Deleting a campaign will also delete all sub-campaigns, if any.
+
+**Request**
+
+```DELETE /campaigns/<campaign_uuid>```
+
+**Response**
+
+```json
+{"id":"fd3180e2-e5e2-45ca-a8e5-b737627132bc","status":"deleted"}
+```
 
 ## Analytics
 
