@@ -524,7 +524,23 @@ Retrieve all QR Codes associated with the account
 
 **HTTP request**
 
-```GET /qrcodes```
+```GET /qrcodes/paginated?page=1&sortField=creation_date&sortOrder=desc&maxRows=5```
+
+Above is request with default args.
+
+Parameters:
+
+- sortField [field to sort with, one of Label, Destination, Campaign, Organisation, creation_date, short_url]
+- sortOrder [desc/asc]
+- filterLabel [string, partial search allowed]
+- filterDestination [string, partial search allowed]
+- filterCampaign [campaign_uuid]
+- filterOrganisation [organisation_uuid]
+- filterDate [string, dd/mm/yyyy]
+- filterType [string, type of QR code]
+- filterShortUrl [string, partial search allowed]
+- filterBatchId [batchID]
+- maxRows [integer]
 
 ---
 
