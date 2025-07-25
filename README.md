@@ -34,6 +34,7 @@ https://api-v2.sandbox.unitag.io
   * [Retrieve a QR code](#retrieve-a-qr-code)
   * [Retrieve all QR codes](#retrieve-all-qr-codes)
   * [Update a QR code URL](#update-a-qr-code-destination-url)
+  * [Delete a QR code]
 * [Filters](#filters)
   * [Create a Filter](#create-a-filter)
   * [Retrieve all Filters](#retrieve-filters-for-a-qr-code)
@@ -569,6 +570,16 @@ Example
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
 | url | string | true | The final URL of your QR Code |
+
+---
+
+### Delete a QR Code
+
+Delete a QR Code
+
+**HTTP request**
+
+```DELETE /qrcode/<qr_code_uuid>```
 
 ---
 
