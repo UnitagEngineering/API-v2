@@ -413,7 +413,7 @@ Example
   "status": "created",
   "qrcode_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
   "content_url": "https://qrcode.link/a/f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
-  "qr_code_image_url": "https://cdn-public.unitag.io/aaaaaaa-7dec-11d0-a765-00a0c91e6bf6/f81d4fae-7dec-11d0-a765-00a0c91e6bf6.png"
+  "qr_code_image_url": "https://cdn-public.unitag.io/aaaaaaa-7dec-11d0-a765-00a0c91e6bf6/preview.png"
 }
 ```
 
