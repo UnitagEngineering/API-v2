@@ -29,26 +29,38 @@ https://api-v2.sandbox.unitag.io
 * [QR codes](#qr-codes)
   * [Preview a QR code](#preview-a-qr-code-design)
   * [Create a QR code](#create-a-qr-code)
-  * [Get and add a QR code template](#retrieve-qr-code-templates)
-  * [Download a QR code](#download-a-qr-code)
   * [Retrieve a QR code](#retrieve-a-qr-code)
   * [Retrieve all QR codes](#retrieve-all-qr-codes)
   * [Update a QR code URL](#update-a-qr-code-destination-url)
-  * [Delete a QR code]
+  * [Update a QR code label](#update-a-qr-code-label)
+  * [Delete a QR code](#delete-a-qr-code)
+  * [Download a QR code](#download-a-qr-code)
+  * [Download multiple QR codes](#download-multiple-qr-codes)
+* [Templates](#templates)
+  * [Retrieve templates](#retrieve-qr-code-templates)
+  * [Create a template](#create-a-template-from-a-qr-code)
+  * [Update a template](#update-a-template)
+  * [Delete a template](#delete-a-template)
 * [Filters](#filters)
-  * [Create a Filter](#create-a-filter)
-  * [Retrieve all Filters](#retrieve-filters-for-a-qr-code)
+  * [Create a filter](#create-a-filter)
+  * [Retrieve filters](#retrieve-filters-for-a-qr-code)
+  * [Update a filter](#update-a-filter)
+  * [Delete a filter](#delete-a-filter)
 * [Domain names](#domain-names)
-  * [Register a Domain](#register-a-domain-name)
-  * [Validate a Domain](#validate-a-domain-name)
+  * [Register a domain](#register-a-domain-name)
+  * [Validate a domain](#validate-a-domain-name)
   * [Retrieve domains](#list-all-domain-names-available)
 * [Campaigns](#campaigns)
-  * [Get list campaigns](#get-list-campaigns)
-  * [Create campaign](#create-campaign)
-  * [Create sub-campaign](#create-sub-campaign)
-  * [Delete campaign](#delete-campaign)
+  * [List campaigns](#list-campaigns)
+  * [Create a campaign](#create-a-campaign)
+  * [Create a sub-campaign](#create-a-sub-campaign)
+  * [Update a campaign](#update-a-campaign)
+  * [Get campaign assets count](#get-campaign-assets-count)
+  * [Delete a campaign](#delete-a-campaign)
 * [Analytics](#analytics)
-  * [Retrieve QR Codes statistics](#retrieve-qr-codes-aggregated-stats)
+  * [Retrieve aggregated stats](#retrieve-qr-codes-aggregated-stats)
+  * [Retrieve visit records](#retrieve-visit-records)
+  * [Export analytics](#export-analytics)
 
 ## API
 
@@ -123,7 +135,7 @@ Create a QR Code Preview for the profile of the API Key
 
 **HTTP request**
 
-`POST /qrcode/preview`
+`POST /qrcodes/preview`
 
 **Request fields**
 
@@ -160,6 +172,7 @@ Example:
       "excavate": false,
       "url": "",
       "width": 0,
+      "height": 0,
       "x": 0,
       "x_norm": 0,
       "y": 0,
@@ -172,6 +185,12 @@ Example:
     },
     "modules": {
       "type": "simple"
+    },
+    "frame": {
+      "style": "simple",
+      "text_top": "",
+      "text_bottom": "SCAN ME",
+      "background_color": "#000000"
     }
   }
 }
@@ -184,8 +203,10 @@ Example:
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
 | type | string | true | Type of QR Code, one of "url, vcard" |  
-| resolution | string | true | Resoluton of your QR Code, one of "dynamic, dynamic-pro, static" 
+| resolution | string | true | Resolution of your QR Code, one of "dynamic, dynamic-pro, static" |
 | url | string | true | Final URL to which your QR Code should redirect to upon scanning |
+| domain_id | string | false | Mandatory if resolution type is "dynamic-pro" |
+| preferred_short_url | string | false | Custom short URL segment (alphanumeric, no special characters) |
 
 *Settings* object:
 
@@ -194,14 +215,24 @@ Example:
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
 | type | string | true | One of "single_color, gradient, image_overlay" |
-| color_one | string | false | Hexadecimal representation of any color used to fill the QR Code eyes and modules |
-| color_background | string | false | Hexadecimal representation of any color used to fill the background |
+| color_one | string | false | Hexadecimal color for QR Code modules and eyes |
+| color_two | string | false | Hexadecimal color for gradient end (only when type is "gradient") |
+| color_background | string | false | Hexadecimal color for the background |
+| gradient_type | string | false | One of "horizontal, vertical, diagonal, diagonal_inverted, radial" (only when type is "gradient") |
+| color_shadow | string | false | Hexadecimal color for shadow |
+| force_shadow | string | false | Shadow intensity, one of "S, M, L, none" |
 
 - *Eyes* object:
 
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
-| type | string | false | Type of Eye, one of "simple, diamond, rounded, rounded_light, rounded_strong, eye_right, eye_left, shield, pillow, star, leaf, sieve, dots, wave, sharp, curved, tik_tak_toe, octagonal, alien, grid"
+| type | string | false | Type of Eye (see table below) |
+| color_ext_top_left | string | false | Hexadecimal color for the external top-left eye |
+| color_ext_top_right | string | false | Hexadecimal color for the external top-right eye |
+| color_ext_bottom_left | string | false | Hexadecimal color for the external bottom-left eye |
+| color_int_top_left | string | false | Hexadecimal color for the internal top-left eye |
+| color_int_top_right | string | false | Hexadecimal color for the internal top-right eye |
+| color_int_bottom_left | string | false | Hexadecimal color for the internal bottom-left eye |
 
 Please read the table below which illustrates the different options:
 
@@ -227,12 +258,14 @@ Please read the table below which illustrates the different options:
 | octagonal | ![alt text](img/octagonal.png "octagonal") |
 | alien | ![alt text](img/alien.png "alien") |
 | grid | ![alt text](img/grid.png "grid") |
+| square_diamond | ![alt text](img/square_diamond.png "square_diamond") |
+| thin_circle | ![alt text](img/thin_circle.png "thin_circle") |
 
 - *Modules* object:
 
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |
-| type | string | false | Type of Module, one of "simple, rounded, rounded_light, rounded_strong, sieve, angular, paint, dots, arrows, styled, rectangles, tik_tak_toe, connections, shinny" |
+| type | string | false | Type of Module (see table below) |
 
 Please read the table below which illustrates the different options:
 
@@ -252,6 +285,8 @@ Please read the table below which illustrates the different options:
 | tik_tak_toe | ![alt text](img/module_tik_tak_toe.png "tik_tak_toe") |
 | connections | ![alt text](img/module_connections.png "connections") |
 | shinny | ![alt text](img/module_shinny.png "shinny") |
+| diamonds | ![alt text](img/module_diamonds.png "diamonds") |
+| small_circles | ![alt text](img/module_small_circles.png "small_circles") |
 
 - *Background* object:
 
@@ -272,10 +307,28 @@ Please read the table below which illustrates the different options:
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |
 | excavate | boolean | false | (default: false) To excavate or not the logo in the QR Code |
-| x | number | false | Absolute origin position  in pixels on the x axis in the QR Code |
+| x | number | false | Absolute origin position in pixels on the x axis in the QR Code |
 | y | number | false | Absolute origin position in pixels on the y axis in the QR Code |
+| x_norm | number | false | Normalized x position offset |
+| y_norm | number | false | Normalized y position offset |
 | width | number | false | Width in pixels of your logo |
+| height | number | false | Height in pixels of your logo |
 | url | string | false | The URL of your remote asset to use as logo |
+
+- *Frame* object (optional):
+
+> Frames add a decorative border with text around your QR Code. The frame is rendered server-side and included in the output image.
+
+| field | type | mandatory | description |  
+| --- | --- | --- | --- |
+| style | string | true | Frame style (see list below) |
+| text_top | string | false | Text displayed above the QR Code (supported by some styles) |
+| text_bottom | string | false | Text displayed below the QR Code |
+| background_color | string | false | Hexadecimal color for the frame (default: black) |
+
+Available frame styles: `simple`, `beverage`, `banner`, `filled_card`, `callout_filled`, `callout_top`, `dashed_border`, `inline`, `scan`, `rounded`, `banner_ribbon`, `phone_scan`, `phone_screen`
+
+Styles that support independent `text_top`: `simple`, `beverage`, `banner`, `filled_card`, `callout_top`, `dashed_border`. Other styles render a single text using `text_bottom`.
 
 **Response**
 
@@ -283,10 +336,17 @@ Content-Type: image/png
 
 The preview image of the resulted QR Code
 
+**Response headers**
+
+| header | description |
+| --- | --- |
+| X-Unitag-Generator | "CONTRAST_WARNING" if the QR Code colors may cause scan issues, "OK" otherwise |
+| X-Unitag-Logo-Too-Big | "true" if the logo exceeds recommended size for scan readability |
+
 ---
 ### Create a QR Code
 
-Create a QR Code Preview for the profile of the API Key
+Create a QR Code for the profile of the API Key
 
 **HTTP request**
 
@@ -395,14 +455,16 @@ Example of data payload with a Campaign associated to the QR code at its creatio
 | field      | type | mandatory | description                                                     |  
 |------------| --- | --- |-----------------------------------------------------------------|  
 | type       | string | true | Type of QR Code, one of "url, vcard"                            |  
-| resolution | string | true | Resoluton of your QR Code, one of "dynamic, dynamic-pro, static" |
-| domain_id  | string | true | Mandatory if resolution type is "dynamic-pro"                   | 
+| resolution | string | true | Resolution of your QR Code, one of "dynamic, dynamic-pro, static" |
+| domain_id  | string | false | Mandatory if resolution type is "dynamic-pro"                   | 
 | url        | string | true | Final URL to which your QR Code should redirect to upon scanning |
 | label      | string | false | Name for your QR code                                           |
+| preferred_short_url | string | false | Custom short URL segment (alphanumeric, no special characters) |
+| campaign   | object | false | Campaign to associate with the QR code (contains `uuid` field) |
 
 *Settings* object:
 
-For more details about the settings object please refer to the *Settings* object in the **QRCode Preview** section
+For more details about the settings object please refer to the *Settings* object in the **QR Code Preview** section
 
 **Response fields**
 
@@ -423,89 +485,6 @@ Example
 | qrcode_id | string | ID of the QR Code created                                                  |
 | content_url | string | Resolution URL, your own domain name if resolution is set to "dynamic-pro" |
 | qr_code_image_url | string | QR Code image available from our CDN                                       |
-
----
-
-### Retrieve QR Code templates
-
-To retrieve the list of existing template:
-
-**HTTP request**
-
-```
-GET /qrcodes/templates
-```
-
-When creating a QR code using a template design, pass the UUID of the template to the POST create QR Code request
-
-```json
-{
-    "settings": {
-        ...
-        "redundancy": "H",
-        "template_id": "c7a5dc7c-4bcb-435d-a5a3-b21658189f7a"
-    },
-    "data": {
-        ...
-    }
-}
-```
-
-### Download a QR Code
-
-Download a QR Code in multiple formats
-
-**HTTP request**
-
-```
-POST /asset/download/qrcode_bundle
-```
-
-**Request fields**
-
-Example single download
-
-```json
-{
-  "asset_uuid": "<qrcode_id>",
-  "format": "png",
-  "size": 300,
-  "unit": "px"
-}
-```
-
-### Download multiple QR Codes
-
-```
-POST /asset/download/export
-```
-
-Example batch download
-
-```json
-{
-  "qrcode_ids": ["<qrcode_id_1>", "<qrcode_id_2>", "<qrcode_id_3>"],
-  "format": "png",
-  "size": 300,
-  "unit": "px"
-}
-```
-
-*Data* object
-
-| field      | type            | mandatory                 | description                |  
-|------------|-----------------|---------------------------|----------------------------|  
-| asset_uuid | string          | true (if single download) | Asset ID to be downloaded  |
-| qrcode_ids | Array of string | true (if batch download)  | Assets ID to be downloaded |
-| format | string | true | Desired output format, one of "png", "svg", "jpeg", "pdf" |
-| size | number | true | Desired output size, range between 100 and 1500 |
-| unit | string | true | Desire output unit, one of "px", "mm" |
-
-**Response**
-
-If a single download has been created, you will receive a binary output matching your request representing the image of your asset
-
-If a batch download has been created, you will obtain a compressed archive, a zip file containing all your assets
 
 ---
 
@@ -573,6 +552,36 @@ Example
 
 ---
 
+### Update a QR Code label
+
+Update the label (name) of a QR Code
+
+**HTTP request**
+
+```PUT /qrcode/<qrcode_id>/label```
+
+**Request fields**
+
+```json
+{
+  "label": "My updated QR code name"
+}
+```
+
+| field | type | mandatory | description |  
+| --- | --- | --- | --- |  
+| label | string | true | The new label for your QR Code |
+
+**Response**
+
+```json
+{
+  "status": "updated"
+}
+```
+
+---
+
 ### Delete a QR Code
 
 Delete a QR Code
@@ -580,6 +589,198 @@ Delete a QR Code
 **HTTP request**
 
 ```DELETE /qrcode/<qr_code_uuid>```
+
+---
+
+### Download a QR Code
+
+Download a QR Code in multiple formats
+
+**HTTP request**
+
+```
+POST /asset/download/qrcode_bundle
+```
+
+**Request fields**
+
+Example single download
+
+```json
+{
+  "asset_uuid": "<qrcode_id>",
+  "format": "png",
+  "size": 300,
+  "unit": "px"
+}
+```
+
+Example with frame
+
+```json
+{
+  "asset_uuid": "<qrcode_id>",
+  "format": "png",
+  "size": 300,
+  "unit": "px",
+  "hasFrame": true,
+  "frame": {
+    "style": "simple",
+    "text_top": "",
+    "text_bottom": "SCAN ME",
+    "background_color": "#000000"
+  }
+}
+```
+
+| field | type | mandatory | description |  
+| --- | --- | --- | --- |  
+| asset_uuid | string | true | Asset ID to be downloaded |
+| format | string | true | Desired output format, one of "png", "svg", "jpeg", "pdf" |
+| size | number | true | Desired output size, range between 100 and 2500 |
+| unit | string | true | Desired output unit, one of "px", "mm" |
+| color_profile | string | false | One of "RGB" (default), "GRAYSCALE" |
+| hasFrame | boolean | false | Whether to include a frame around the QR Code |
+| frame | object | false | Frame settings (see Frame object in Preview section) |
+
+**Response**
+
+Binary output matching your request representing the image of your asset
+
+---
+
+### Download multiple QR Codes
+
+```
+POST /asset/download/export
+```
+
+Example batch download
+
+```json
+{
+  "qrcode_ids": ["<qrcode_id_1>", "<qrcode_id_2>", "<qrcode_id_3>"],
+  "format": "png",
+  "size": 300,
+  "unit": "px"
+}
+```
+
+| field | type | mandatory | description |  
+| --- | --- | --- | --- |  
+| qrcode_ids | Array of string | true | Assets ID to be downloaded |
+| format | string | true | Desired output format, one of "png", "svg", "jpeg", "pdf" |
+| size | number | true | Desired output size, range between 100 and 2500 |
+| unit | string | true | Desired output unit, one of "px", "mm" |
+| color_profile | string | false | One of "RGB" (default), "GRAYSCALE" |
+| hasFrame | boolean | false | Whether to include a frame around each QR Code |
+| frame | object | false | Frame settings (see Frame object in Preview section) |
+
+**Response**
+
+A compressed archive (zip) containing all your assets
+
+---
+
+## Templates
+
+Templates allow you to save and reuse QR Code designs.
+
+### Retrieve QR Code templates
+
+Retrieve the list of existing templates
+
+**HTTP request**
+
+```
+GET /qrcodes/templates
+```
+
+**Response**
+
+An array of template objects with their UUIDs, names, and associated design.
+
+When creating a QR code using a template design, pass the UUID of the template to the POST create QR Code request:
+
+```json
+{
+    "settings": {
+        "redundancy": "H",
+        "template_id": "c7a5dc7c-4bcb-435d-a5a3-b21658189f7a"
+    },
+    "data": {
+        "type": "url",
+        "resolution": "dynamic",
+        "url": "https://example.com"
+    }
+}
+```
+
+---
+
+### Create a template from a QR Code
+
+Save a QR Code's design as a reusable template
+
+**HTTP request**
+
+```POST /qrcode/<qrcode_id>/template```
+
+**Request fields**
+
+```json
+{
+  "template_name": "My template"
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| template_name | string | true | Name for the template |
+
+**Response**
+
+```json
+{
+  "template_id": "c7a5dc7c-4bcb-435d-a5a3-b21658189f7a"
+}
+```
+
+---
+
+### Update a template
+
+Update the name of an existing template
+
+**HTTP request**
+
+```PUT /qrcodes/template/<template_id>```
+
+**Request fields**
+
+```json
+{
+  "name": "Updated template name"
+}
+```
+
+**Response**
+
+```json
+{
+  "status": "updated",
+  "uuid": "c7a5dc7c-4bcb-435d-a5a3-b21658189f7a",
+  "name": "Updated template name"
+}
+```
+
+---
+
+### Delete a template
+
+**HTTP request**
+
+```DELETE /qrcodes/template/<template_id>```
 
 ---
 
@@ -668,7 +869,7 @@ Supported values: Any Alpha-2 code part of ISO 3166 -- [ISO Search](https://www.
 
 ```json
 {
-  "type": "language",
+  "type": "location_country",
   "value": "US"
 }
 ```
@@ -680,6 +881,57 @@ Supported values: Any Alpha-2 code part of ISO 3166 -- [ISO Search](https://www.
 **HTTP request**
 
 ```GET /qrcode/<qrcode_id>/filters```
+
+---
+
+### Update a filter
+
+Update an existing filter's statements and/or destination URL
+
+**HTTP request**
+
+```PUT /qrcode/<qrcode_id>/filter/<filter_id>```
+
+**Request fields**
+
+```json
+{
+  "final_url": "https://www.unitag.io/updated-page",
+  "statements": [
+    {
+      "type": "language",
+      "value": "fr"
+    }
+  ]
+}
+```
+
+**Response**
+
+```json
+{
+  "filter_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "final_url": "https://www.unitag.io/updated-page",
+  "status": "updated"
+}
+```
+
+---
+
+### Delete a filter
+
+**HTTP request**
+
+```DELETE /qrcode/<qrcode_id>/filter/<filter_id>```
+
+**Response**
+
+```json
+{
+  "status": "deleted",
+  "filter_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+}
+```
 
 ---
 
@@ -810,8 +1062,8 @@ NB: As an owner of a domain name more fields might be added if you have shared t
 |---------------| --- |--------------------------------|  
 | domain_id     | string | The ID of the domain           |
 | domain_name   | string | The domain name as string      |
-| ssl_activated | string | Status of the SSL service      |
-| activated     | string | Status of the domain name      |
+| ssl_activated | boolean | Status of the SSL service      |
+| activated     | boolean | Status of the domain name      |
 | status        | string | Used for deactivation purposes |
 
 ---
@@ -820,12 +1072,12 @@ NB: As an owner of a domain name more fields might be added if you have shared t
 
 The campaigns endpoint allows you to work around the campaign management tool, helping you to sort your QR codes.
 
-### Get list campaigns
+### List campaigns
 
-To retrieve the list of created campaigns and sub-campaigns
+Retrieve the list of created campaigns and sub-campaigns
 
 **Request**
-```GET /qrcodes/campaigns```
+```GET /campaigns```
 
 **Response**
 ```json
@@ -851,127 +1103,96 @@ To retrieve the list of created campaigns and sub-campaigns
         "color": "#2196f3",
         "creation_date": "2021-02-24T13:51:35.127Z",
         "sub_campaigns": null
-    },
-    {
-        "uuid": "e4a64ffe-e699-41c5-bd11-9d613db93e75",
-        "name": "CAMPAIGN 2",
-        "color": "orange",
-        "creation_date": "2021-02-24T13:51:35.619Z",
-        "sub_campaigns": [
-            {
-                "uuid": "d531061e-babe-476b-97da-65004bd616b4",
-                "name": "Sub Campaign 1",
-                "color": "#f44336",
-                "creation_date": "2021-02-24T13:51:35.619Z",
-                "sub_campaigns": null
-            },
-            {
-                "uuid": "150ad07c-5e46-4bb8-85ca-d0ae5fc9defb",
-                "name": "Sub Campaign 2",
-                "color": "#f44336",
-                "creation_date": "2021-02-24T13:51:35.619Z",
-                "sub_campaigns": null
-            }
-        ]
     }
 ]
 ```
 
-### Create campaign
+---
+
+### Create a campaign
 
 **Request**
 
 ```POST /qrcodes/campaign```
 
-* Payload example
-
 ```json
-{"name":"Nouvelle Campagne","color":"blue"}
+{"name": "New Campaign", "color": "blue"}
 ```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| name | string | true | Name for the campaign |
+| color | string | true | Color for the campaign (hex color or predefined: purple, red, blue, green, orange, yellow) |
 
 **Response**
 
 ```json
 {
-  "ID": 0,
-  "CreatedAt": "2023-05-26T12:39:52.921Z",
-  "UpdatedAt": "2023-05-26T12:39:52.921Z",
-  "DeletedAt": null,
   "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
-  "name": "Nouvelle Campagne",
+  "name": "New Campaign",
   "color": "blue",
-  "UserID": 159,
-  "User": {
-    "id": 0,
-    "email": "",
-    "uuid": "",
-    "is_root_account": false,
-    "org": "",
-    "activated": false,
-    "deactivation_reason": "",
-    "Templates": null,
-    "account_type": "",
-    "renewal_date": null,
-    "account_role": "",
-    "organisation_role": "",
-    "legacy_id": 0
-  },
-  "ParentCampaign": null,
-  "ParentCampaignID": null,
-  "ChildCampaigns": null,
-  "LegacyID": 0
+  "creation_date": "2023-05-26T12:39:52.921Z"
 }
 ```
 
-### Create sub-campaign
+---
+
+### Create a sub-campaign
 
 **Request**
 
 ```POST /qrcodes/campaign```
 
-* Payload example
-
-uuid is the uuid of the parent's campaign
+Pass the `uuid` of the parent campaign:
 
 ```json
-{"uuid":"fd3180e2-e5e2-45ca-a8e5-b737627132bc","name":"Nouvelle sous-Campagne","color":"yellow"}
+{"uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc", "name": "Sub Campaign", "color": "yellow"}
+```
+
+---
+
+### Update a campaign
+
+**Request**
+
+```PUT /campaigns/<campaign_id>```
+
+```json
+{"name": "Updated Campaign Name", "color": "#f44336"}
 ```
 
 **Response**
 
 ```json
 {
-  "ID": 0,
-  "CreatedAt": "2023-05-26T12:41:57.212Z",
-  "UpdatedAt": "2023-05-26T12:41:57.212Z",
-  "DeletedAt": null,
-  "uuid": "59016d6d-7e65-47e6-9eb8-296395a701b3",
-  "name": "Nouvelle sous-Campagne",
-  "color": "yellow",
-  "UserID": 159,
-  "User": {
-    "id": 0,
-    "email": "",
-    "uuid": "",
-    "is_root_account": false,
-    "org": "",
-    "activated": false,
-    "deactivation_reason": "",
-    "Templates": null,
-    "account_type": "",
-    "renewal_date": null,
-    "account_role": "",
-    "organisation_role": "",
-    "legacy_id": 0
-  },
-  "ParentCampaign": null,
-  "ParentCampaignID": 7063,
-  "ChildCampaigns": null,
-  "LegacyID": 0
+  "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+  "name": "Updated Campaign Name",
+  "color": "#f44336"
 }
 ```
 
-### Delete campaign
+---
+
+### Get campaign assets count
+
+Retrieve the number of QR codes associated with a campaign
+
+**Request**
+
+```GET /campaigns/<campaign_id>/assets_count```
+
+**Response**
+
+```json
+{
+  "id": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+  "count": 42
+}
+```
+
+---
+
+### Delete a campaign
 
 Deleting a campaign will also delete all sub-campaigns, if any.
 
@@ -982,8 +1203,10 @@ Deleting a campaign will also delete all sub-campaigns, if any.
 **Response**
 
 ```json
-{"id":"fd3180e2-e5e2-45ca-a8e5-b737627132bc","status":"deleted"}
+{"id": "fd3180e2-e5e2-45ca-a8e5-b737627132bc", "status": "deleted"}
 ```
+
+---
 
 ## Analytics
 
@@ -1034,23 +1257,14 @@ The following query reads as:
             "operator": "",
             "value": [
                 "6b8e573e-f5ca-4402-b300-3641ee9484c0",
-                "b229d8bc-92f6-4d88-a9d4-6e8adc7187ef",
-                "5a78c7d2-e5ab-4742-9093-10ff19e89bb5"
-            ],
-            "label": [
-                "Website_QR_Codes #2",
-                "Website QR Code #0",
-                "Website QR Codes #1",
-                ""
+                "b229d8bc-92f6-4d88-a9d4-6e8adc7187ef"
             ]
         }
     ],
     "time_range": {
         "type": 1,
         "number": 2,
-        "unit": "weeks",
-        "start_date": "",
-        "end_date": ""
+        "unit": "weeks"
     }
 }
 ```
@@ -1059,8 +1273,14 @@ The following query reads as:
 
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
-| time_range.number | number | false | Time observed (number) |
-| time_range.unit | string | false | Time observed (units) - one of: minutes, hours, days, weeks, months |
+| time_range.type | number | true | 0 for absolute date range, 1 for relative |
+| time_range.number | number | false | Time observed (number), required if type is 1 |
+| time_range.unit | string | false | Time observed (units) - one of: minutes, hours, days, weeks, months. Required if type is 1 |
+| time_range.start_date | string | false | ISO 8601 date, required if type is 0 |
+| time_range.end_date | string | false | ISO 8601 date, required if type is 0 |
+| filters | array | false | Array of filter objects to narrow results |
+| filters[].field | string | false | "QR Codes" to filter by specific QR code UUIDs |
+| filters[].value | array | false | Array of QR code UUIDs |
 
 
 **Response**
@@ -1071,13 +1291,6 @@ The following query reads as:
       "date": 1635984000000,
       "count": 0
     },
-    {
-      "date": 1636070400000,
-      "count": 0
-    },
-    {
-      ...
-    }
     {
       "date": 1637193600000,
       "count": 1
@@ -1107,7 +1320,60 @@ The following query reads as:
 }
 ```
 
+---
 
+### Retrieve visit records
 
+Retrieve detailed visit records for your QR Codes
 
+**Request**
 
+```POST /analytics/qrcodes/search/visit-records```
+
+Uses the same request body format as the aggregated stats endpoint above.
+
+**Response**
+
+```json
+{
+  "visits_history": {
+    "cursor_id": "",
+    "visits": [
+      {
+        "date": 1637251153589,
+        "label": "My QR code",
+        "country_iso": "GB",
+        "city_iso": "London",
+        "model": "iPhone"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### Export analytics
+
+Export analytics data as an Excel spreadsheet
+
+**Request**
+
+```POST /analytics/qrcodes/export```
+
+Uses the same request body format as the aggregated stats endpoint. Add `time_zone` to localize dates in the export.
+
+```json
+{
+  "time_range": {
+    "type": 1,
+    "number": 4,
+    "unit": "weeks"
+  },
+  "time_zone": "Europe/Paris"
+}
+```
+
+**Response**
+
+Binary file (Excel .xlsx spreadsheet)
