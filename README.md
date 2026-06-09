@@ -1,5 +1,9 @@
 # API V2
 
+> 📘 **Interactive reference:** this API is now described by an OpenAPI 3.1 spec
+> ([`openapi.yaml`](./openapi.yaml)), rendered with Scalar. See [`DEPLOY.md`](./DEPLOY.md)
+> for hosting. The spec is the source of truth; this README is kept as a human-readable mirror.
+
 ## Introduction
 
 Unitag provides a simple yet powerful REST API to integrate the generation of QR Codes in your application

@@ -1,0 +1,1007 @@
+openapi: 3.1.0
+info:
+  title: Unitag API v2
+  version: "2.0.0"
+  description: |
+    Unitag provides a simple yet powerful REST API to integrate QR Code generation,
+    management and analytics into your application.
+
+    ## Authentication
+    Pass your API key in the `X-Unitag-ApiKey` header on every request. Keys are
+    generated from the dashboard (Settings → API) and are scoped to a single
+    environment (production or sandbox) — assets are isolated between environments.
+
+    ## Rate limits
+    When exceeded, the API returns `429 Too Many Requests`. Counters reset daily at
+    00:00 GMT. Sandbox: 1,000 calls/day. Production: 1,000,000 calls/day.
+
+    ## IDs
+    Most identifiers are RFC 4122 UUIDs, e.g. `f81d4fae-7dec-11d0-a765-00a0c91e6bf6`.
+  contact:
+    name: Unitag Support
+    url: https://unitag.io
+servers:
+  - url: https://api-v2.unitag.io
+    description: Production
+  - url: https://api-v2.sandbox.unitag.io
+    description: Sandbox (1,000 calls/day, assets deleted after 6 months)
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: QR Codes
+    description: Create, preview, retrieve, update, download and delete QR Codes.
+  - name: Templates
+    description: Save and reuse QR Code designs.
+  - name: Filters
+    description: Conditional redirection rules (Dynamic / Dynamic Pro only).
+  - name: Domain Names
+    description: Use your own domain with Dynamic Pro QR Codes (Gold plan and up).
+  - name: Campaigns
+    description: Organise QR Codes into campaigns and sub-campaigns.
+  - name: Analytics
+    description: Aggregated stats, visit records and exports for your QR Codes.
+
+paths:
+  /qrcodes/preview:
+    post:
+      tags: [QR Codes]
+      summary: Preview a QR Code design
+      description: Renders a preview image for the design without persisting a QR Code.
+      operationId: previewQRCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QRCodeRequest'
+            example:
+              data: { type: "url", resolution: "dynamic", url: "https://unitag.io" }
+              settings:
+                template_id: ""
+                redundancy: "M"
+                eyes: { type: "curved" }
+                layout: { type: "gradient", gradient_type: "vertical", color_background: "#ffffff", color_one: "#53c1a6", color_two: "#c9285a", force_shadow: "none" }
+                modules: { type: "simple" }
+                frame: { style: "simple", text_bottom: "SCAN ME", background_color: "#000000" }
+      responses:
+        '200':
+          description: PNG image of the previewed QR Code.
+          headers:
+            X-Unitag-Generator:
+              description: '"CONTRAST_WARNING" if colors may cause scan issues, "OK" otherwise.'
+              schema: { type: string }
+            X-Unitag-Logo-Too-Big:
+              description: '"true" if the logo exceeds the recommended size for scan readability.'
+              schema: { type: string }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /qrcode:
+    post:
+      tags: [QR Codes]
+      summary: Create a QR Code
+      operationId: createQRCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QRCodeRequest'
+            examples:
+              dynamic:
+                summary: Dynamic QR Code with image overlay
+                value:
+                  data: { type: "url", resolution: "dynamic", url: "https://example.com/my-page", label: "My first QR code" }
+                  settings:
+                    layout: { type: "image_overlay", color_background: "#ffffff", force_shadow: "none" }
+                    eyes: { type: "simple" }
+                    modules: { type: "simple" }
+                    background: { url: "https://example.com/my-asset.png", brightness: 0.5, contrast: 0.5 }
+                    logo: { excavate: false, x: 0, y: 0, width: 20, url: "https://example.com/my-logo.png" }
+              dynamicPro:
+                summary: Dynamic Pro (custom domain)
+                value:
+                  data: { type: "url", resolution: "dynamic-pro", domain_id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6", url: "https://example.com/my-page" }
+              withCampaign:
+                summary: Associated to a campaign at creation
+                value:
+                  data: { type: "url", resolution: "dynamic", url: "https://example.com/my-page", label: "My first QR code", campaign: { uuid: "fd3180e2-e5e2-45ca-a8e5-b737627132bc" } }
+      responses:
+        '200':
+          description: QR Code created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateQRCodeResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /qrcode/{qrcode_id}:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    get:
+      tags: [QR Codes]
+      summary: Retrieve a QR Code
+      operationId: getQRCode
+      responses:
+        '200':
+          description: The QR Code resource.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [QR Codes]
+      summary: Delete a QR Code
+      operationId: deleteQRCode
+      responses:
+        '200':
+          description: QR Code deleted.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /qrcodes/paginated:
+    get:
+      tags: [QR Codes]
+      summary: Retrieve all QR Codes (paginated)
+      operationId: listQRCodes
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: maxRows, in: query, schema: { type: integer, default: 5 } }
+        - name: sortField
+          in: query
+          schema: { type: string, enum: [Label, Destination, Campaign, Organisation, creation_date, short_url], default: creation_date }
+        - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { name: filterLabel, in: query, description: Partial match, schema: { type: string } }
+        - { name: filterDestination, in: query, description: Partial match, schema: { type: string } }
+        - { name: filterCampaign, in: query, schema: { type: string, format: uuid } }
+        - { name: filterOrganisation, in: query, schema: { type: string, format: uuid } }
+        - { name: filterDate, in: query, description: "Format dd/mm/yyyy", schema: { type: string } }
+        - { name: filterType, in: query, schema: { type: string } }
+        - { name: filterShortUrl, in: query, description: Partial match, schema: { type: string } }
+        - { name: filterBatchId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: A page of QR Codes.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /qrcode/{qrcode_id}/url:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    put:
+      tags: [QR Codes]
+      summary: Update a QR Code destination URL
+      description: Only available for Dynamic and Dynamic Pro QR Codes.
+      operationId: updateQRCodeUrl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri, description: The final URL of your QR Code. }
+            example: { url: "https://unitag.io/features" }
+      responses:
+        '200':
+          description: URL updated.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /qrcode/{qrcode_id}/label:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    put:
+      tags: [QR Codes]
+      summary: Update a QR Code label
+      operationId: updateQRCodeLabel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string, description: The new label (name) for your QR Code. }
+            example: { label: "My updated QR code name" }
+      responses:
+        '200':
+          description: Label updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, example: "updated" } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /asset/download/qrcode_bundle:
+    post:
+      tags: [QR Codes]
+      summary: Download a QR Code
+      description: Download a single QR Code in the requested format.
+      operationId: downloadQRCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DownloadSingleRequest' }
+            examples:
+              simple:
+                value: { asset_uuid: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6", format: "png", size: 300, unit: "px" }
+              withFrame:
+                value: { asset_uuid: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6", format: "png", size: 300, unit: "px", hasFrame: true, frame: { style: "simple", text_bottom: "SCAN ME", background_color: "#000000" } }
+      responses:
+        '200':
+          description: Binary image of the asset.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /asset/download/export:
+    post:
+      tags: [QR Codes]
+      summary: Download multiple QR Codes
+      description: Download several QR Codes as a single ZIP archive.
+      operationId: downloadQRCodesBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DownloadBatchRequest' }
+            example: { qrcode_ids: ["6b8e573e-f5ca-4402-b300-3641ee9484c0", "b229d8bc-92f6-4d88-a9d4-6e8adc7187ef", "5a78c7d2-e5ab-4742-9093-10ff19e89bb5"], format: "png", size: 300, unit: "px" }
+      responses:
+        '200':
+          description: ZIP archive containing the requested assets.
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /qrcodes/templates:
+    get:
+      tags: [Templates]
+      summary: Retrieve QR Code templates
+      operationId: listTemplates
+      responses:
+        '200':
+          description: Array of template objects (UUID, name, design).
+          content:
+            application/json:
+              schema: { type: array, items: { type: object, additionalProperties: true } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /qrcode/{qrcode_id}/template:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    post:
+      tags: [Templates]
+      summary: Create a template from a QR Code
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [template_name]
+              properties:
+                template_name: { type: string }
+            example: { template_name: "My template" }
+      responses:
+        '200':
+          description: Template created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { template_id: { type: string, format: uuid } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /qrcodes/template/{template_id}:
+    parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [Templates]
+      summary: Update a template
+      operationId: updateTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+            example: { name: "Updated template name" }
+      responses:
+        '200':
+          description: Template updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "updated" }
+                  uuid: { type: string, format: uuid }
+                  name: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      operationId: deleteTemplate
+      responses:
+        '200':
+          description: Template deleted.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /qrcode/{qrcode_id}/filter:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    post:
+      tags: [Filters]
+      summary: Create a filter
+      description: Conditional redirection. Available for Dynamic and Dynamic Pro QR Codes only.
+      operationId: createFilter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FilterRequest' }
+            example:
+              final_url: "https://www.unitag.io/welcome"
+              statements: [{ type: "language", value: "en" }]
+      responses:
+        '200':
+          description: Filter created.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /qrcode/{qrcode_id}/filters:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    get:
+      tags: [Filters]
+      summary: Retrieve filters for a QR Code
+      operationId: listFilters
+      responses:
+        '200':
+          description: Array of filters.
+          content:
+            application/json:
+              schema: { type: array, items: { type: object, additionalProperties: true } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /qrcode/{qrcode_id}/filter/{filter_id}:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+      - name: filter_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [Filters]
+      summary: Update a filter
+      operationId: updateFilter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FilterRequest' }
+            example:
+              final_url: "https://www.unitag.io/updated-page"
+              statements: [{ type: "language", value: "fr" }]
+      responses:
+        '200':
+          description: Filter updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filter_id: { type: string, format: uuid }
+                  final_url: { type: string }
+                  status: { type: string, example: "updated" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Filters]
+      summary: Delete a filter
+      operationId: deleteFilter
+      responses:
+        '200':
+          description: Filter deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "deleted" }
+                  filter_id: { type: string, format: uuid }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /domains:
+    get:
+      tags: [Domain Names]
+      summary: List all domain names
+      operationId: listDomains
+      responses:
+        '200':
+          description: Array of domains for the account.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Domain' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Domain Names]
+      summary: Register a domain name
+      operationId: registerDomain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain_name]
+              properties:
+                domain_name: { type: string, example: "example.org" }
+      responses:
+        '200':
+          description: Domain registered (configure DNS as instructed in the response).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DomainRegistration' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /domains/{domain_id}/check:
+    parameters:
+      - name: domain_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Domain Names]
+      summary: Validate a domain name
+      description: Validates the DNS configuration of a registered domain.
+      operationId: checkDomain
+      responses:
+        '200':
+          description: Domain validated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { domain_uuid: { type: string, format: uuid } }
+        '409':
+          description: DNS not configured correctly.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /campaigns:
+    get:
+      tags: [Campaigns]
+      summary: List campaigns
+      operationId: listCampaigns
+      responses:
+        '200':
+          description: Array of campaigns with nested sub-campaigns.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Campaign' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /qrcodes/campaign:
+    post:
+      tags: [Campaigns]
+      summary: Create a campaign or sub-campaign
+      description: Omit `uuid` to create a top-level campaign; pass the parent's `uuid` to create a sub-campaign.
+      operationId: createCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, color]
+              properties:
+                name: { type: string }
+                color: { type: string, description: "Hex color or one of: purple, red, blue, green, orange, yellow" }
+                uuid: { type: string, format: uuid, description: "Parent campaign UUID (for sub-campaigns)" }
+            examples:
+              campaign: { value: { name: "New Campaign", color: "blue" } }
+              subCampaign: { value: { uuid: "fd3180e2-e5e2-45ca-a8e5-b737627132bc", name: "Sub Campaign", color: "yellow" } }
+      responses:
+        '200':
+          description: Campaign created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CampaignFlat' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /campaigns/{campaign_id}:
+    parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [Campaigns]
+      summary: Update a campaign
+      operationId: updateCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                color: { type: string }
+            example: { name: "Updated Campaign Name", color: "#f44336" }
+      responses:
+        '200':
+          description: Campaign updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CampaignFlat' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Campaigns]
+      summary: Delete a campaign
+      description: Deleting a campaign also deletes all of its sub-campaigns.
+      operationId: deleteCampaign
+      responses:
+        '200':
+          description: Campaign deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  status: { type: string, example: "deleted" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /campaigns/{campaign_id}/assets_count:
+    parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Campaigns]
+      summary: Get campaign assets count
+      operationId: getCampaignAssetsCount
+      responses:
+        '200':
+          description: Number of QR Codes in the campaign.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  count: { type: integer, example: 42 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/qrcodes/search:
+    post:
+      tags: [Analytics]
+      summary: Retrieve QR Codes aggregated stats
+      operationId: analyticsSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnalyticsRequest' }
+            examples:
+              relative: { summary: Relative range (last 2 weeks), value: { time_range: { type: 1, number: 2, unit: "weeks" } } }
+              absolute: { summary: Absolute range, value: { time_range: { type: 0, start_date: "2022-07-31T23:00:00.000Z", end_date: "2022-09-01T23:00:00.000Z" } } }
+              filtered:
+                summary: Specific QR Codes
+                value:
+                  filters: [{ field: "QR Codes", operator: "", value: ["6b8e573e-f5ca-4402-b300-3641ee9484c0"] }]
+                  time_range: { type: 1, number: 2, unit: "weeks" }
+      responses:
+        '200':
+          description: Aggregated statistics.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /analytics/qrcodes/search/visit-records:
+    post:
+      tags: [Analytics]
+      summary: Retrieve visit records
+      description: Detailed per-visit records. Same request body as the aggregated stats endpoint.
+      operationId: analyticsVisitRecords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnalyticsRequest' }
+      responses:
+        '200':
+          description: Visit records.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  visits_history: { $ref: '#/components/schemas/VisitsHistory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /analytics/qrcodes/export:
+    post:
+      tags: [Analytics]
+      summary: Export analytics
+      description: Export analytics as an Excel spreadsheet. Same request body, plus optional `time_zone`.
+      operationId: analyticsExport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AnalyticsRequest'
+                - type: object
+                  properties:
+                    time_zone: { type: string, example: "Europe/Paris" }
+            example: { time_range: { type: 1, number: 4, unit: "weeks" }, time_zone: "Europe/Paris" }
+      responses:
+        '200':
+          description: Excel (.xlsx) spreadsheet.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Unitag-ApiKey
+      description: API key generated from the dashboard (Settings → API), scoped to one environment.
+
+  parameters:
+    QRCodeId:
+      name: qrcode_id
+      in: path
+      required: true
+      description: UUID of the QR Code.
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Invalid request format.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Bad or missing API key.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Insufficient rights or credits.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The resource cannot be found for this account.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limit exceeded. Counters reset daily at 00:00 GMT.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string, description: Human-readable cause of the error. }
+
+    QRCodeRequest:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/QRData' }
+        settings: { $ref: '#/components/schemas/QRSettings' }
+
+    QRData:
+      type: object
+      required: [type, resolution, url]
+      properties:
+        type: { type: string, enum: [url, vcard], description: Type of QR Code. }
+        resolution: { type: string, enum: [dynamic, dynamic-pro, static], description: Resolution mode. }
+        url: { type: string, format: uri, description: Destination URL on scan. }
+        label: { type: string, description: Name for your QR Code. }
+        domain_id: { type: string, format: uuid, description: Required when resolution is "dynamic-pro". }
+        preferred_short_url: { type: string, description: "Custom short URL segment (alphanumeric, no special characters)." }
+        campaign:
+          type: object
+          description: Campaign to associate at creation.
+          properties:
+            uuid: { type: string, format: uuid }
+
+    QRSettings:
+      type: object
+      properties:
+        template_id: { type: string, description: UUID of a saved template to base the design on. }
+        redundancy: { type: string, enum: [L, M, Q, H], description: Error-correction level. }
+        layout: { $ref: '#/components/schemas/Layout' }
+        eyes: { $ref: '#/components/schemas/Eyes' }
+        modules: { $ref: '#/components/schemas/Modules' }
+        background: { $ref: '#/components/schemas/Background' }
+        logo: { $ref: '#/components/schemas/Logo' }
+        frame: { $ref: '#/components/schemas/Frame' }
+
+    Layout:
+      type: object
+      properties:
+        type: { type: string, enum: [single_color, gradient, image_overlay] }
+        color_one: { type: string, description: Hex color for modules and eyes. }
+        color_two: { type: string, description: Hex gradient end color (when type is "gradient"). }
+        color_background: { type: string, description: Hex background color. }
+        gradient_type: { type: string, enum: [horizontal, vertical, diagonal, diagonal_inverted, radial] }
+        color_shadow: { type: string }
+        force_shadow: { type: string, enum: [S, M, L, none] }
+
+    Eyes:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [simple, diamond, rounded, rounded_light, rounded_strong, eye_right, eye_left, shield, pillow, star, leaf, sieve, dots, wave, sharp, curved, tik_tak_toe, octagonal, alien, grid, square_diamond, thin_circle]
+        color_ext_top_left: { type: string }
+        color_ext_top_right: { type: string }
+        color_ext_bottom_left: { type: string }
+        color_int_top_left: { type: string }
+        color_int_top_right: { type: string }
+        color_int_bottom_left: { type: string }
+
+    Modules:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [simple, rounded, rounded_light, rounded_strong, sieve, angular, paint, dots, arrows, styled, rectangles, tik_tak_toe, connections, shinny, diamonds, small_circles]
+
+    Background:
+      type: object
+      properties:
+        url: { type: string, format: uri, description: Remote asset used as overlay (≈300×300px recommended). }
+        brightness: { type: number, format: float, minimum: 0, maximum: 1, default: 0.5 }
+        contrast: { type: number, format: float, minimum: 0, maximum: 1, default: 0.5 }
+
+    Logo:
+      type: object
+      properties:
+        excavate: { type: boolean, default: false, description: Clear modules behind the logo. }
+        x: { type: number, description: Absolute x origin (px). }
+        y: { type: number, description: Absolute y origin (px). }
+        x_norm: { type: number, description: Normalized x offset. }
+        y_norm: { type: number, description: Normalized y offset. }
+        width: { type: number, description: Logo width (px). }
+        height: { type: number, description: Logo height (px). }
+        url: { type: string, format: uri, description: Remote asset used as logo. }
+
+    Frame:
+      type: object
+      description: Decorative border with text, rendered server-side.
+      required: [style]
+      properties:
+        style:
+          type: string
+          enum: [simple, beverage, banner, filled_card, callout_filled, callout_top, dashed_border, inline, scan, rounded, banner_ribbon, phone_scan, phone_screen]
+        text_top: { type: string, description: "Top text (supported by: simple, beverage, banner, filled_card, callout_top, dashed_border)." }
+        text_bottom: { type: string, description: Bottom text (used as the single text by styles that don't support text_top). }
+        background_color: { type: string, default: "#000000", description: Hex frame color. }
+
+    CreateQRCodeResponse:
+      type: object
+      properties:
+        status: { type: string, enum: [created, updated] }
+        qrcode_id: { type: string, format: uuid }
+        content_url: { type: string, format: uri, description: Resolution URL (your domain if Dynamic Pro). }
+        qr_code_image_url: { type: string, format: uri, description: QR Code image on the Unitag CDN. }
+
+    DownloadSingleRequest:
+      type: object
+      required: [asset_uuid, format, size, unit]
+      properties:
+        asset_uuid: { type: string, format: uuid }
+        format: { type: string, enum: [png, svg, jpeg, pdf] }
+        size: { type: number, minimum: 100, maximum: 2500 }
+        unit: { type: string, enum: [px, mm] }
+        color_profile: { type: string, enum: [RGB, GRAYSCALE], default: RGB }
+        hasFrame: { type: boolean }
+        frame: { $ref: '#/components/schemas/Frame' }
+
+    DownloadBatchRequest:
+      type: object
+      required: [qrcode_ids, format, size, unit]
+      properties:
+        qrcode_ids: { type: array, items: { type: string, format: uuid } }
+        format: { type: string, enum: [png, svg, jpeg, pdf] }
+        size: { type: number, minimum: 100, maximum: 2500 }
+        unit: { type: string, enum: [px, mm] }
+        color_profile: { type: string, enum: [RGB, GRAYSCALE], default: RGB }
+        hasFrame: { type: boolean }
+        frame: { $ref: '#/components/schemas/Frame' }
+
+    FilterRequest:
+      type: object
+      required: [final_url, statements]
+      properties:
+        final_url: { type: string, format: uri, description: Destination if all statements are fulfilled. }
+        statements: { type: array, items: { $ref: '#/components/schemas/Statement' } }
+
+    Statement:
+      type: object
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [device, language, location_country, location_precise, time]
+        value:
+          type: string
+          description: |
+            Format depends on `type`:
+            - device: blackberry, iphone, ipad, windows_phone, windows_tablet, windows_computer, apple_computer, android_phone, android_tablet
+            - language: ISO 639-1 alpha-2 (e.g. "en")
+            - location_country: ISO 3166 alpha-2 (e.g. "US")
+
+    Domain:
+      type: object
+      properties:
+        domain_id: { type: string, format: uuid }
+        domain_name: { type: string }
+        ssl_activated: { type: boolean }
+        activated: { type: boolean }
+        status: { type: string, description: Used for deactivation purposes. }
+
+    DomainRegistration:
+      type: object
+      properties:
+        type: { type: string, enum: [APEX, SUBDOMAIN] }
+        requested_domain: { type: string }
+        domain_uuid: { type: string, format: uuid }
+        fqdn: { type: string, description: For SUBDOMAIN — create a CNAME to this value. }
+        ip: { type: string, description: For APEX — create an A record to this IP. }
+
+    Campaign:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        creation_date: { type: string, format: date-time }
+        sub_campaigns:
+          type: [array, "null"]
+          items: { $ref: '#/components/schemas/Campaign' }
+
+    CampaignFlat:
+      type: object
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        creation_date: { type: string, format: date-time }
+
+    AnalyticsRequest:
+      type: object
+      required: [time_range]
+      properties:
+        time_range: { $ref: '#/components/schemas/TimeRange' }
+        filters:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string, description: '"QR Codes" to filter by specific UUIDs.' }
+              operator: { type: string }
+              value: { type: array, items: { type: string, format: uuid } }
+              label: { type: array, items: { type: string } }
+
+    TimeRange:
+      type: object
+      required: [type]
+      properties:
+        type: { type: integer, enum: [0, 1], description: "0 = absolute date range, 1 = relative." }
+        number: { type: integer, description: Required when type is 1. }
+        unit: { type: string, enum: [minutes, hours, days, weeks, months], description: Required when type is 1. }
+        start_date: { type: string, format: date-time, description: Required when type is 0. }
+        end_date: { type: string, format: date-time, description: Required when type is 0. }
+
+    AnalyticsResponse:
+      type: object
+      properties:
+        histogram:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: integer, format: int64, description: Epoch ms. }
+              count: { type: integer }
+        visits_count: { type: integer }
+        visits_count_comparison: { type: integer }
+        unique_visitors_count: { type: integer }
+        unique_visitors_count_comparison: { type: integer }
+        countries_histogram:
+          type: array
+          items:
+            type: object
+            properties:
+              country_iso: { type: string }
+              count: { type: integer }
+        visits_history: { $ref: '#/components/schemas/VisitsHistory' }
+
+    VisitsHistory:
+      type: object
+      properties:
+        cursor_id: { type: string }
+        visits:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: integer, format: int64, description: Epoch ms. }
+              label: { type: string }
+              country_iso: { type: string }
+              city_iso: { type: string }
+              model: { type: string }

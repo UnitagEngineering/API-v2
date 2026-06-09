@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unitag API v2 — Reference</title>
+    <link rel="icon" href="https://unitag.io/favicon.ico" />
+    <style>
+      body { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Scalar API Reference (self-hosted).
+      The page and the OpenAPI spec (./openapi.yaml) are served by us.
+      The Scalar bundle is loaded from jsDelivr by default. To remove this last
+      external runtime dependency, vendor the bundle locally (see DEPLOY.md) and
+      point the <script src> below at ./scalar.standalone.js.
+    -->
+    <script id="api-reference" data-url="./openapi.yaml"></script>
+    <script>
+      var configuration = {
+        theme: 'default',
+        layout: 'modern',
+        hideDownloadButton: false,
+        metaData: {
+          title: 'Unitag API v2',
+        },
+      }
+      document.getElementById('api-reference').dataset.configuration =
+        JSON.stringify(configuration)
+    </script>
+    <!-- Pin a specific version in production for reproducibility (see DEPLOY.md). -->
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>
