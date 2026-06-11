@@ -218,13 +218,17 @@ Example:
 
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
-| type | string | true | One of "single_color, gradient, image_overlay" |
+| type | string | true | One of "single_color, gradient, image_overlay" — controls how the QR **modules** are coloured/filled, **not** the logo (see note below) |
 | color_one | string | false | Hexadecimal color for QR Code modules and eyes |
 | color_two | string | false | Hexadecimal color for gradient end (only when type is "gradient") |
 | color_background | string | false | Hexadecimal color for the background |
 | gradient_type | string | false | One of "horizontal, vertical, diagonal, diagonal_inverted, radial" (only when type is "gradient") |
 | color_shadow | string | false | Hexadecimal color for shadow |
 | force_shadow | string | false | Shadow intensity, one of "S, M, L, none" |
+
+> **Logo vs. `image_overlay` — these are independent features.**
+> - To add a **logo** (a small image in the centre of the QR Code), use the *Logo* object below. It works with **any** `layout.type` — keep `type` as `single_color` or `gradient`. You do **not** need `image_overlay` for a logo.
+> - `image_overlay` is a separate effect that fills the QR **modules themselves** with an image. It **requires** a *Background* object with a `url` (or `asset_uuid`); sending `type: "image_overlay"` without a background image returns `400`.
 
 - *Eyes* object:
 
@@ -296,6 +300,8 @@ Please read the table below which illustrates the different options:
 
 > Attention:   
 > The overlay will apply an image on your QR Code, we recommend using a 300px by 300px image with a sufficient contrast against your background color or your QR Code my not be readable by native scanners
+>
+> This *Background* object is only used when `layout.type` is `image_overlay`, and is **required** in that case. It is **not** how you add a logo — for a logo, use the *Logo* object instead.
 
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |
@@ -308,13 +314,15 @@ Please read the table below which illustrates the different options:
 > Attention:  
 > A logo is an image present in your QR Code that hides some information, thanks to our QR Code redundancy it should have no effect on the QR Code readability. But, a logo too big or misplaced can render your QR Code unreadable
 
+> The logo is added by including this *Logo* object. It is **independent of `layout.type`** — keep `type` as `single_color` (or `gradient`); you do not need `image_overlay`. To simply place a logo in the centre, send the `url` and `width` and omit `x_norm`/`y_norm` — the logo defaults to the QR centre.
+
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |
-| excavate | boolean | false | (default: false) To excavate or not the logo in the QR Code |
+| excavate | boolean | false | (default: false) Controls how the logo sits on the QR Code. `true`: the QR **modules under the logo are removed** (excavated), so the logo shows inside a clear/white zone. `false`: the logo is **drawn directly on top of the modules**, with no excavation. |
 | x | number | false | Absolute origin position in pixels on the x axis in the QR Code |
 | y | number | false | Absolute origin position in pixels on the y axis in the QR Code |
-| x_norm | number | false | Normalized x position offset |
-| y_norm | number | false | Normalized y position offset |
+| x_norm | number | false | Normalized x position offset (defaults to 0 = centred when omitted) |
+| y_norm | number | false | Normalized y position offset (defaults to 0 = centred when omitted) |
 | width | number | false | Width in pixels of your logo |
 | height | number | false | Height in pixels of your logo |
 | url | string | false | The URL of your remote asset to use as logo |
@@ -369,10 +377,9 @@ Example
   },
   "settings": {
     "layout": {
-      "gradient_type": "",
-      "type": "image_overlay",
-      "color_background": "#ffffff",
-      "force_shadow": "none"
+      "type": "single_color",
+      "color_one": "#000000",
+      "color_background": "#ffffff"
     },
     "eyes": {
       "type": "simple"
@@ -380,21 +387,16 @@ Example
     "modules": {
       "type": "simple"
     },
-    "background": {
-      "url": "https://example.com/my-asset.png",
-      "brightness": 0.5,
-      "contrast": 0.5
-    },
     "logo": {
       "excavate": false,
-      "x": 0,
-      "y": 0,
-      "width": 20,
+      "width": 60,
       "url": "https://example.com/my-logo.png"
     }
   }
 }
 ```
+
+> The example above adds a centred logo on a single-colour QR Code (the most common case). The logo lives in the `logo` object and does **not** require `image_overlay`; `x_norm`/`y_norm` are omitted so the logo is centred. See the **Logo vs. `image_overlay`** note in the *QR Code Preview* section.
 
 Example of data payload with Dynamic Pro
 
@@ -425,10 +427,38 @@ Example of data payload with a Campaign associated to the QR code at its creatio
   },
   "settings": {
     "layout": {
-      "gradient_type": "",
+      "type": "single_color",
+      "color_one": "#000000",
+      "color_background": "#ffffff"
+    },
+    "eyes": {
+      "type": "simple"
+    },
+    "modules": {
+      "type": "simple"
+    },
+    "logo": {
+      "excavate": false,
+      "width": 60,
+      "url": "https://example.com/my-logo.png"
+    }
+  }
+}
+```
+
+Example with an **image overlay** (the QR modules are filled with an image — this is the only case that uses `image_overlay`, and a `background` image is **required**; note there is no `logo` here):
+
+```json
+{
+  "data": {
+    "type": "url",
+    "resolution": "dynamic",
+    "url": "https://example.com/my-page"
+  },
+  "settings": {
+    "layout": {
       "type": "image_overlay",
-      "color_background": "#ffffff",
-      "force_shadow": "none"
+      "color_background": "#ffffff"
     },
     "eyes": {
       "type": "simple"
@@ -440,13 +470,6 @@ Example of data payload with a Campaign associated to the QR code at its creatio
       "url": "https://example.com/my-asset.png",
       "brightness": 0.5,
       "contrast": 0.5
-    },
-    "logo": {
-      "excavate": false,
-      "x": 0,
-      "y": 0,
-      "width": 20,
-      "url": "https://example.com/my-logo.png"
     }
   }
 }
