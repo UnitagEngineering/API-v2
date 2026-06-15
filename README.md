@@ -1301,8 +1301,8 @@ The following query reads as:
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
 | time_range.type | number | true | 0 for absolute date range, 1 for relative |
-| time_range.number | number | false | Time observed (number), required if type is 1 |
-| time_range.unit | string | false | Time observed (units) - one of: minutes, hours, days, weeks, months. Required if type is 1 |
+| time_range.number | number | false | Length of the relative look-back window, expressed as a count of `unit` periods — i.e. "the last N units". Paired with `unit`: `number: 2` + `unit: weeks` means the last 2 weeks (and likewise the last N days, months, etc.). Required when type is 1; not used for absolute ranges (type 0). |
+| time_range.unit | string | false | Unit of the relative look-back window, paired with `number` — one of: minutes, hours, days, weeks, months. E.g. `number: 3` + `unit: months` means the last 3 months. Required when type is 1; not used for absolute ranges (type 0). |
 | time_range.start_date | string | false | ISO 8601 date, required if type is 0 |
 | time_range.end_date | string | false | ISO 8601 date, required if type is 0 |
 | filters | array | false | Array of filter objects to narrow results |
