@@ -50,6 +50,18 @@ https://api-v2.sandbox.unitag.io
   * [Retrieve filters](#retrieve-filters-for-a-qr-code)
   * [Update a filter](#update-a-filter)
   * [Delete a filter](#delete-a-filter)
+* [GS1 Digital Link](#gs1-digital-link)
+  * [Supported identifiers](#supported-identifiers)
+  * [Build a Digital Link path](#build-a-digital-link-path)
+  * [Create a GS1 Digital Link QR code](#create-a-gs1-digital-link-qr-code)
+  * [Typed destinations (link types)](#typed-destinations-link-types)
+  * [Resolver behaviour](#resolver-behaviour)
+* [Scheduled destination changes](#scheduled-destination-changes)
+  * [Create a schedule](#create-a-schedule)
+  * [List schedules](#list-schedules)
+  * [Retrieve a schedule](#retrieve-a-schedule)
+  * [Update a schedule](#update-a-schedule)
+  * [Delete a schedule](#delete-a-schedule)
 * [Domain names](#domain-names)
   * [Register a domain](#register-a-domain-name)
   * [Validate a domain](#validate-a-domain-name)
@@ -821,8 +833,16 @@ Filters available:
 * Language based
 * Device based
 * Location based (module required)
-* Time based (module required)
 * Combination of all the above
+
+On GS1 Digital Link QR codes a filter can additionally carry a `link_type`, which turns it into a
+*typed* destination rather than a plain conditional redirection — see
+[Typed destinations](#typed-destinations-link-types).
+
+> **Time-based changes are not filters.** A filter is evaluated on every scan, against properties of
+> the scan itself (device, language, country). To change where a code points at a given date and
+> time, use a [schedule](#scheduled-destination-changes) instead: it rewrites the destination once,
+> when the moment arrives.
 
 ### Create a Filter
 
@@ -857,12 +877,14 @@ If an english speaker scans this QR Code it will be redirected to https://www.un
 |------------|--------------------| --- |-----------------------------------------------------------------|  
 | final_url  | string             | true | The destination URL used if the filter statements are fulfilled |
 | statements | Array of Statement | true | List of Statements for the filter                               | 
+| link_type  | string             | false | GS1 Web Vocabulary link type. Makes this a *typed* GS1 destination. GS1 codes only — see [Typed destinations](#typed-destinations-link-types) |
+| active     | boolean            | false | Whether the resolver may select this destination. Defaults to `true` on create; omitting it on update leaves the current value unchanged |
 
 *Statement* object:
 
-| field | type | mandatory | description                                                                            |  
-|-------| --- | --- |----------------------------------------------------------------------------------------|  
-| type  | string | true | Type of Statement, one of "device, language, location_country, location_precise, time" |  
+| field | type | mandatory | description                                                                 |  
+|-------| --- | --- |-------------------------------------------------------------------------------|  
+| type  | string | true | Type of Statement, one of "device", "language", "location_country", "context" |  
 | value | string | true | Refer to next paragraph for formats specifications |                       
 
 **Statement values format**
@@ -898,6 +920,21 @@ Supported values: Any Alpha-2 code part of ISO 3166 -- [ISO Search](https://www.
 {
   "type": "location_country",
   "value": "US"
+}
+```
+
+*context type Statement*
+
+Scopes a typed GS1 destination to an audience. Only meaningful alongside a `link_type` — a
+`context` statement without one is rejected with a `400`.
+
+Supported values: `consumer`, `healthcareProfessional`, `patient`, `recycler`, `retailer`,
+`supplier` (bare, or prefixed with `gs1:`)
+
+```json
+{
+  "type": "context",
+  "value": "patient"
 }
 ```
 
@@ -959,6 +996,516 @@ Update an existing filter's statements and/or destination URL
   "filter_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
 }
 ```
+
+---
+
+## GS1 Digital Link
+
+A GS1 Digital Link QR code encodes a product identifier as a web URI, so a single printed code can
+be read by both a consumer's phone and a supply-chain scanner:
+
+```
+https://id.yourbrand.com/01/03512345678900/10/LOT42?17=261231
+                         │  │              │  │     │
+                         │  └─ GTIN        │  └─ lot └─ expiry (data attribute)
+                         └─ AI 01          └─ AI 10
+```
+
+Unitag operates a **GS1-certified Conformant Resolver** (GS1 Conformant Resolver standard v1.2.0,
+live certification and verification completed).
+
+Because the identifier and the domain are both yours, the printed code is not tied to Unitag: it
+carries no vendor-specific token, so pointing the domain elsewhere keeps every printed code working.
+
+> NB: GS1 Digital Link codes are Dynamic or Dynamic Pro. Use `dynamic-pro` with a
+> [registered domain](#domain-names) to serve codes from your own domain.
+
+### Supported identifiers
+
+**Primary keys** — the identifier that opens the path:
+
+| AI | Identifier | AI | Identifier |
+|---|---|---|---|
+| `01` | GTIN | `8003` | GRAI |
+| `00` | SSCC | `8004` | GIAI |
+| `253` | GDTI | `8006` | ITIP |
+| `255` | GCN | `8010` | CPID |
+| `401` | GINC | `8017` | GSRN (provider) |
+| `402` | GSIN | `8018` | GSRN (recipient) |
+| `414` / `415` / `417` | GLN variants | | |
+
+GTINs (AI `01`) are validated: 14 digits with a correct GS1 mod-10 check digit. A 13-digit value is
+left-padded to 14 automatically. An invalid check digit is rejected at creation, and a malformed
+GTIN in a scanned URI is answered `400` by the resolver.
+
+**Key qualifiers** — appended to the path, always emitted in the standard order:
+
+| AI | Qualifier |
+|---|---|
+| `22` | Consumer product variant (CPV) |
+| `10` | Batch / lot |
+| `21` | Serial |
+
+**Data attributes** — appended as query parameters, not path segments. This includes **expiry date
+(AI `17`)**, production date (`11`), best-before (`15`), net weight (`310n`), price, and the rest of
+the GS1 Application Identifier set. Placing them in the query string rather than the path is what
+the GS1 Digital Link standard requires — `17` is a data attribute, not a key qualifier.
+
+Attributes outside the supported set are ignored rather than rejected.
+
+### Build a Digital Link path
+
+Validates identifiers and returns the canonical Digital Link path. Creates nothing.
+
+**HTTP request**
+
+```POST /gs1/look-up```
+
+**Request fields**
+
+```json
+{
+  "gtins": [
+    {
+      "primary_key": "01",
+      "value": "03512345678900",
+      "key_identifiers": [
+        { "key": "10", "value": "LOT42" }
+      ],
+      "data_attributes": [
+        { "key": "17", "value": "261231" }
+      ]
+    }
+  ]
+}
+```
+
+**Response**
+
+```json
+{
+  "GS1ShortURL": [
+    {
+      "primary_key": "01",
+      "short_url": "/01/03512345678900/10/LOT42?17=261231"
+    }
+  ]
+}
+```
+
+Key qualifiers are emitted in the order `22 → 10 → 21` regardless of the order you supply them in.
+
+---
+
+### Create a GS1 Digital Link QR code
+
+**HTTP request**
+
+```POST /qrcode/serial```
+
+**Request fields**
+
+Supply either a `short_url` containing `/01/`, or the `gs1` object. When both are present the
+`short_url` wins and is parsed as the canonical source.
+
+```json
+{
+  "data": {
+    "type": "url",
+    "resolution": "dynamic-pro",
+    "domain_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "url": "https://brand.example/products/welcome",
+    "gs1": {
+      "gtin": "03512345678900",
+      "batch": "LOT42",
+      "cpv": "",
+      "serial": ""
+    }
+  },
+  "settings": {
+    "redundancy": "M"
+  }
+}
+```
+
+**Details**
+
+*data.gs1* object:
+
+| field  | type   | mandatory | description                                   |
+|--------|--------|-----------|-----------------------------------------------|
+| gtin   | string | true      | 14-digit GTIN with a valid mod-10 check digit |
+| cpv    | string | false     | Consumer product variant (AI 22)              |
+| batch  | string | false     | Batch / lot (AI 10)                           |
+| serial | string | false     | Serial (AI 21)                                |
+
+To include **data attributes** (expiry, weights, …), pass a full path in `data.short_url` instead —
+build it with [`/gs1/look-up`](#build-a-digital-link-path):
+
+```json
+{
+  "data": {
+    "type": "url",
+    "resolution": "dynamic-pro",
+    "domain_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "url": "https://brand.example/products/welcome",
+    "short_url": "/01/03512345678900/10/LOT42?17=261231"
+  }
+}
+```
+
+**Notes**
+
+* The GS1 identifier path is **immutable** once created. The destination (`data.url`) and the
+  filters stay editable — that is what lets you repoint a printed code without reprinting it.
+* Each distinct Digital Link path is its own QR code. A GTIN, a GTIN+lot and a GTIN+serial are three
+  separate codes with their own destinations and their own rules.
+* Creating a code for a path that already exists returns `406`.
+
+---
+
+### Typed destinations (link types)
+
+A GS1 Digital Link code can expose several destinations at once, each labelled with a
+[GS1 Web Vocabulary](https://ref.gs1.org/voc/) link type — a product page, a Digital Product
+Passport, safety information, a recipe — and a scanner asks for the one it wants with `?linkType=`.
+
+Typed destinations are created through the ordinary [filter](#filters) endpoints by adding a
+`link_type`:
+
+```POST /qrcode/<qrcode_id>/filter```
+
+```json
+{
+  "link_type": "dpp",
+  "final_url": "https://dpp.brand.example/03512345678900/LOT42",
+  "statements": []
+}
+```
+
+The value is a GS1 Web Vocabulary token, bare (`dpp`) or CURIE-prefixed (`gs1:dpp`). The bare token
+is what gets stored and returned. Unknown tokens are rejected with a `400`, as is any `link_type`
+sent for a QR code that is not a GS1 Digital Link code.
+
+Accepted tokens:
+
+```
+activityIdeas · allergenInfo · appDownload · backgroundInfo · brandHomepageClinical
+brandHomepagePatient · careersInfo · certificationInfo · consumerHandlingStorageInfo · dpp
+eifu · epcis · epil · eventsInfo · faqs · handledBy · hasRetailers · homepage · ingredientsInfo
+instructions · jws · leaveReview · locationInfo · logisticsInfo · loyaltyProgram · masterData
+menuInfo · nutritionalInfo · openingHoursInfo · paymentLink · pip · productSustainabilityInfo
+promotion · purchaseSuppliesOrAccessories · quickStartGuide · recallStatus · recipeInfo
+registerProduct · registryEntry · relatedImage · relatedVideo · reportFound · review · safetyInfo
+scheduleTime · serviceInfo · smartLabel · smpc · socialMedia · statisticInfo · subscribe · support
+sustainabilityInfo · traceability · tutorial · userAgreement · verificationService · whatsInTheBox
+```
+
+**Combining with conditions.** A typed destination can also carry `statements`, so the same link
+type can resolve differently by country or language:
+
+```json
+{
+  "link_type": "safetyInfo",
+  "final_url": "https://brand.example/fr/securite",
+  "statements": [
+    { "type": "location_country", "value": "FR" }
+  ]
+}
+```
+
+Among the destinations of a requested link type, one whose statements match the scan wins;
+otherwise the unconditioned destination of that type is used.
+
+**Audience scoping.** A `context` statement narrows a destination to a GS1 audience. A destination
+stating an audience is only reachable when the scan asks for it (`?context=patient`), so a context
+acts as a tie-break between destinations of the same link type — it can never capture an ordinary
+scan:
+
+```json
+{
+  "link_type": "epil",
+  "final_url": "https://brand.example/leaflet/clinical",
+  "statements": [
+    { "type": "context", "value": "healthcareProfessional" }
+  ]
+}
+```
+
+**Switching a destination off.** Set `active: false` to take a typed destination out of service
+without deleting it. The resolver then falls back to the unconditioned destination of that link
+type, and stops advertising the deactivated one. Omitting `active` on an update leaves it unchanged.
+
+---
+
+### Resolver behaviour
+
+How a Unitag-resolved GS1 Digital Link URI answers a scan.
+
+**Redirect (default).** A plain scan is answered `307 Temporary Redirect` to the destination, after
+evaluating any country / language / device filters. Responses are marked non-cacheable so a
+destination change takes effect immediately.
+
+**Requesting a link type.**
+
+```
+GET https://id.yourbrand.com/01/03512345678900?linkType=dpp
+```
+
+`linkType` accepts the bare token, the `gs1:` CURIE, or the full vocabulary URI. `?linkType=homepage`
+resolves to the code's default destination. Requesting a link type the code does not have is
+answered `404` — the standard requires this rather than a silent fallback — and the response still
+advertises the link types that *are* available.
+
+**Linkset.** The full set of links for a code, as `application/linkset+json`
+([RFC 9264](https://www.rfc-editor.org/rfc/rfc9264.html)):
+
+```
+GET https://id.yourbrand.com/01/03512345678900?linkType=all
+GET https://id.yourbrand.com/01/03512345678900     Accept: application/linkset+json
+```
+
+```json
+{
+  "linkset": [
+    {
+      "anchor": "https://id.yourbrand.com/01/03512345678900",
+      "https://ref.gs1.org/voc/defaultLink": [
+        { "href": "https://brand.example/products/welcome", "title": "Homepage" }
+      ],
+      "https://ref.gs1.org/voc/homepage": [
+        { "href": "https://brand.example/products/welcome", "title": "Homepage" }
+      ],
+      "https://ref.gs1.org/voc/dpp": [
+        { "href": "https://dpp.brand.example/03512345678900", "title": "Digital Product Passport" }
+      ]
+    }
+  ]
+}
+```
+
+The `anchor` is your own domain. Deactivated destinations are omitted, so the linkset never
+advertises a link that `?linkType=` would refuse.
+
+**Link headers.** Redirect responses carry [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html)
+`Link` headers advertising the available typed links and the linkset:
+
+```
+Link: <https://brand.example/products/welcome>; rel="https://ref.gs1.org/voc/defaultLink"
+Link: <https://dpp.brand.example/03512345678900>; rel="https://ref.gs1.org/voc/dpp"; title="Digital Product Passport"
+Link: <https://id.yourbrand.com/01/03512345678900?linkType=all>; rel="linkset"; type="application/linkset+json"
+```
+
+**Discovery document.** Served on each resolver domain:
+
+```GET https://id.yourbrand.com/.well-known/gs1resolver```
+
+```json
+{
+  "name": "Unitag GS1 Digital Link Resolver",
+  "resolverRoot": "https://id.yourbrand.com",
+  "supportedPrimaryKeys": ["00", "01", "253", "255", "401", "402", "414", "415", "417", "8003", "8004", "8006", "8010", "8017", "8018"],
+  "supportedContextValuesEnumerated": ["country", "language", "device"]
+}
+```
+
+**Status codes.**
+
+| Code | Meaning |
+|---|---|
+| `307` | Redirect to the resolved destination |
+| `200` | Linkset returned (`application/linkset+json`) |
+| `300` | Several products match the URI equally; the candidates are listed rather than guessed |
+| `400` | Malformed Digital Link URI — e.g. a GTIN failing its mod-10 check digit |
+| `404` | Unknown code, or a `linkType` this code does not have |
+
+`HEAD` is supported and resolves like `GET` without a body.
+
+**Not supported:** compressed GS1 Digital Link URIs (and therefore no `owl:sameAs` header).
+Content negotiation covers `application/linkset+json`; other media types fall through to the
+redirect.
+
+---
+
+## Scheduled Destination Changes
+
+Schedule a QR code or packaging product to change its destination at a given date and time — a
+campaign that goes live at midnight, a product page that switches to end-of-life information on a
+known date, seasonal content.
+
+**This is a scheduled change, not a scan-time condition.** A rule fires once, at `trigger_at`, and
+rewrites the destination; every scan after that resolves to the new URL until the next rule fires.
+It is not a "route to X between 09:00 and 17:00" filter — the resolver evaluates device, language
+and country on each scan, but never the clock. If you need the destination to depend on the moment
+of the scan itself, that is not currently supported.
+
+Because a schedule rewrites the same field you would edit by hand, it composes with everything else:
+[filters](#filters) keep applying after the swap, and on a GS1 code the Digital Link path is
+untouched.
+
+### Base URL
+
+Schedules are served by a dedicated host rather than the main REST API:
+
+| Environment | Base URL |
+|---|---|
+| Production | `https://scheduler-api.unitag.io` |
+| Sandbox | `https://scheduler-api.sandbox.unitag.io` |
+
+In production the same service is also reachable at `https://api-v2.unitag.io/_b/scheduler`.
+
+Authentication is the same `X-Unitag-ApiKey` header as the rest of this API. You may additionally
+send `X-Unitag-Org-Id` to scope the request to a specific organisation; it falls back to the key's
+owner for standalone accounts.
+
+If a schedule lookup cannot be completed, these endpoints return `503` rather than `401` — a `401`
+here always means the key itself was rejected, never a transient failure.
+
+### Create a schedule
+
+**HTTP request**
+
+```POST /schedules```
+
+**Request fields**
+
+```json
+{
+  "target_type": "qrcode",
+  "target_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "rules": [
+    {
+      "trigger_at": "2026-12-24T23:00:00Z",
+      "destination_url": "https://brand.example/christmas",
+      "position": 1
+    },
+    {
+      "trigger_at": "2026-12-26T23:00:00Z",
+      "destination_url": "https://brand.example/sales",
+      "position": 2
+    }
+  ]
+}
+```
+
+**Details**
+
+| field       | type             | mandatory | description                                                                 |
+|-------------|------------------|-----------|-----------------------------------------------------------------------------|
+| target_type | string           | false     | `qrcode` (default) or `packaging_product`                                   |
+| target_id   | string (uuid)    | true      | UUID of the QR code or packaging product                                    |
+| qr_code_id  | string (uuid)    | false     | Legacy alias for `target_id` on `qrcode` targets                            |
+| rules       | Array of Rule    | true      | Between 1 and 3 rules                                                       |
+
+*Rule* object:
+
+| field           | type              | mandatory | description                                            |
+|-----------------|-------------------|-----------|--------------------------------------------------------|
+| trigger_at      | string (RFC 3339) | true      | When the change applies. Must be in the future         |
+| destination_url | string            | true      | The new destination                                     |
+| position        | integer           | true      | Order of the rule, 1–3                                  |
+
+**Constraints**
+
+* Maximum **3 rules** per schedule
+* Only **one active schedule per target** at a time
+* The target must exist and belong to your organisation, otherwise `403`
+* `trigger_at` must be in the future at creation
+* Destinations on **packaging product** targets must be `https://`
+
+**Response**
+
+```json
+{
+  "id": 12,
+  "uuid": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+  "organisation_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "target_type": "qrcode",
+  "target_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "qr_code_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "status": "pending",
+  "created_at": "2026-08-05T10:00:00Z",
+  "updated_at": "2026-08-05T10:00:00Z",
+  "rules": [
+    {
+      "id": 34,
+      "uuid": "c3d4e5f6-a7b8-9012-cdef-345678901234",
+      "trigger_at": "2026-12-24T23:00:00Z",
+      "destination_url": "https://brand.example/christmas",
+      "position": 1,
+      "fired_at": null
+    }
+  ]
+}
+```
+
+`status` is derived from the rules: `pending` (none fired), `active` (some fired, some pending),
+`expired` (all fired). `fired_at` is `null` until a rule has been applied.
+
+Rules are applied by a background job that runs every few seconds, so a change takes effect within
+seconds of `trigger_at` rather than exactly on it.
+
+---
+
+### List schedules
+
+**HTTP request**
+
+```GET /schedules?page=1&page_size=20```
+
+**Response**
+
+```json
+{
+  "schedules": [],
+  "total": 42,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+---
+
+### Retrieve a schedule
+
+**HTTP request**
+
+```GET /schedules/<schedule_id>```
+
+---
+
+### Update a schedule
+
+Replaces **all** rules on the schedule. Send the complete set you want, not just the changed ones.
+
+**HTTP request**
+
+```PUT /schedules/<schedule_id>```
+
+**Request fields**
+
+```json
+{
+  "rules": [
+    {
+      "trigger_at": "2026-12-25T23:00:00Z",
+      "destination_url": "https://brand.example/boxing-day",
+      "position": 1
+    }
+  ]
+}
+```
+
+---
+
+### Delete a schedule
+
+Deletes the schedule and all its rules. Rules that have already fired are not rolled back — the
+destination stays where it was last set.
+
+**HTTP request**
+
+```DELETE /schedules/<schedule_id>```
 
 ---
 
