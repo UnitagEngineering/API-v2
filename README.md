@@ -56,12 +56,6 @@ https://api-v2.sandbox.unitag.io
   * [Create a GS1 Digital Link QR code](#create-a-gs1-digital-link-qr-code)
   * [Typed destinations (link types)](#typed-destinations-link-types)
   * [Resolver behaviour](#resolver-behaviour)
-* [Scheduled destination changes](#scheduled-destination-changes)
-  * [Create a schedule](#create-a-schedule)
-  * [List schedules](#list-schedules)
-  * [Retrieve a schedule](#retrieve-a-schedule)
-  * [Update a schedule](#update-a-schedule)
-  * [Delete a schedule](#delete-a-schedule)
 * [Domain names](#domain-names)
   * [Register a domain](#register-a-domain-name)
   * [Validate a domain](#validate-a-domain-name)
@@ -839,10 +833,14 @@ On GS1 Digital Link QR codes a filter can additionally carry a `link_type`, whic
 *typed* destination rather than a plain conditional redirection — see
 [Typed destinations](#typed-destinations-link-types).
 
-> **Time-based changes are not filters.** A filter is evaluated on every scan, against properties of
-> the scan itself (device, language, country). To change where a code points at a given date and
-> time, use a [schedule](#scheduled-destination-changes) instead: it rewrites the destination once,
-> when the moment arrives.
+> **Time-based redirection is not a filter.** A filter is evaluated on every scan, against
+> properties of the scan itself — device, language, country. It never considers the clock.
+>
+> To change where a code points at a given date and time, schedule the change instead: scheduling
+> rewrites the destination once, when the moment arrives, and every scan after that resolves to the
+> new URL. Scheduling is available from the dashboard and is not currently exposed through this API;
+> the equivalent from here is to
+> [update the destination URL](#update-a-qr-code-destination-url) at the moment you want it to change.
 
 ### Create a Filter
 
@@ -1324,191 +1322,6 @@ Link: <https://id.yourbrand.com/01/03512345678900?linkType=all>; rel="linkset"; 
 **Not supported:** compressed GS1 Digital Link URIs (and therefore no `owl:sameAs` header).
 Content negotiation covers `application/linkset+json`; other media types fall through to the
 redirect.
-
----
-
-## Scheduled Destination Changes
-
-Schedule a QR code or packaging product to change its destination at a given date and time — a
-campaign that goes live at midnight, a product page that switches to end-of-life information on a
-known date, seasonal content.
-
-**This is a scheduled change, not a scan-time condition.** A rule fires once, at `trigger_at`, and
-rewrites the destination; every scan after that resolves to the new URL until the next rule fires.
-It is not a "route to X between 09:00 and 17:00" filter — the resolver evaluates device, language
-and country on each scan, but never the clock. If you need the destination to depend on the moment
-of the scan itself, that is not currently supported.
-
-Because a schedule rewrites the same field you would edit by hand, it composes with everything else:
-[filters](#filters) keep applying after the swap, and on a GS1 code the Digital Link path is
-untouched.
-
-### Base URL
-
-Schedules are served by a dedicated host rather than the main REST API:
-
-| Environment | Base URL |
-|---|---|
-| Production | `https://scheduler-api.unitag.io` |
-| Sandbox | `https://scheduler-api.sandbox.unitag.io` |
-
-In production the same service is also reachable at `https://api-v2.unitag.io/_b/scheduler`.
-
-> ⚠️ **Authentication differs from the rest of this API.** Schedule endpoints take a Cognito
-> **Bearer token**, not the `X-Unitag-ApiKey` header:
->
-> ```
-> Authorization: Bearer <jwt>
-> X-Unitag-Org-Id: <organisation_uuid>
-> ```
->
-> `X-Unitag-Org-Id` is optional — it falls back to the token subject for standalone accounts.
-
-### Create a schedule
-
-**HTTP request**
-
-```POST /schedules```
-
-**Request fields**
-
-```json
-{
-  "target_type": "qrcode",
-  "target_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
-  "rules": [
-    {
-      "trigger_at": "2026-12-24T23:00:00Z",
-      "destination_url": "https://brand.example/christmas",
-      "position": 1
-    },
-    {
-      "trigger_at": "2026-12-26T23:00:00Z",
-      "destination_url": "https://brand.example/sales",
-      "position": 2
-    }
-  ]
-}
-```
-
-**Details**
-
-| field       | type             | mandatory | description                                                                 |
-|-------------|------------------|-----------|-----------------------------------------------------------------------------|
-| target_type | string           | false     | `qrcode` (default) or `packaging_product`                                   |
-| target_id   | string (uuid)    | true      | UUID of the QR code or packaging product                                    |
-| qr_code_id  | string (uuid)    | false     | Legacy alias for `target_id` on `qrcode` targets                            |
-| rules       | Array of Rule    | true      | Between 1 and 3 rules                                                       |
-
-*Rule* object:
-
-| field           | type              | mandatory | description                                            |
-|-----------------|-------------------|-----------|--------------------------------------------------------|
-| trigger_at      | string (RFC 3339) | true      | When the change applies. Must be in the future         |
-| destination_url | string            | true      | The new destination                                     |
-| position        | integer           | true      | Order of the rule, 1–3                                  |
-
-**Constraints**
-
-* Maximum **3 rules** per schedule
-* Only **one active schedule per target** at a time
-* The target must exist and belong to your organisation, otherwise `403`
-* `trigger_at` must be in the future at creation
-* Destinations on **packaging product** targets must be `https://`
-
-**Response**
-
-```json
-{
-  "id": 12,
-  "uuid": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
-  "organisation_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "target_type": "qrcode",
-  "target_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
-  "qr_code_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
-  "status": "pending",
-  "created_at": "2026-08-05T10:00:00Z",
-  "updated_at": "2026-08-05T10:00:00Z",
-  "rules": [
-    {
-      "id": 34,
-      "uuid": "c3d4e5f6-a7b8-9012-cdef-345678901234",
-      "trigger_at": "2026-12-24T23:00:00Z",
-      "destination_url": "https://brand.example/christmas",
-      "position": 1,
-      "fired_at": null
-    }
-  ]
-}
-```
-
-`status` is derived from the rules: `pending` (none fired), `active` (some fired, some pending),
-`expired` (all fired). `fired_at` is `null` until a rule has been applied.
-
-Rules are applied by a background job that runs every few seconds, so a change takes effect within
-seconds of `trigger_at` rather than exactly on it.
-
----
-
-### List schedules
-
-**HTTP request**
-
-```GET /schedules?page=1&page_size=20```
-
-**Response**
-
-```json
-{
-  "schedules": [],
-  "total": 42,
-  "page": 1,
-  "page_size": 20
-}
-```
-
----
-
-### Retrieve a schedule
-
-**HTTP request**
-
-```GET /schedules/<schedule_id>```
-
----
-
-### Update a schedule
-
-Replaces **all** rules on the schedule. Send the complete set you want, not just the changed ones.
-
-**HTTP request**
-
-```PUT /schedules/<schedule_id>```
-
-**Request fields**
-
-```json
-{
-  "rules": [
-    {
-      "trigger_at": "2026-12-25T23:00:00Z",
-      "destination_url": "https://brand.example/boxing-day",
-      "position": 1
-    }
-  ]
-}
-```
-
----
-
-### Delete a schedule
-
-Deletes the schedule and all its rules. Rules that have already fired are not rolled back — the
-destination stays where it was last set.
-
-**HTTP request**
-
-```DELETE /schedules/<schedule_id>```
 
 ---
 
