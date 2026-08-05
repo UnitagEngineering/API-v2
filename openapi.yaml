@@ -36,6 +36,11 @@ tags:
     description: Save and reuse QR Code designs.
   - name: Filters
     description: Conditional redirection rules (Dynamic / Dynamic Pro only).
+  - name: GS1 Digital Link
+    description: |
+      Build and create GS1 Digital Link QR Codes, and expose several typed
+      destinations behind a single printed code. Unitag operates a
+      GS1-certified Conformant Resolver (standard v1.2.0).
   - name: Domain Names
     description: Use your own domain with Dynamic Pro QR Codes (Gold plan and up).
   - name: Campaigns
@@ -459,6 +464,85 @@ paths:
                   filter_id: { type: string, format: uuid }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /gs1/look-up:
+    post:
+      tags: [GS1 Digital Link]
+      summary: Build GS1 Digital Link paths
+      description: |
+        Validates a set of GS1 identifiers and returns the corresponding GS1
+        Digital Link paths, with key qualifiers emitted in the standard order
+        (`01 → 22 → 10 → 21`) and data attributes appended as query parameters.
+
+        Does not create anything. Use the returned `short_url` with
+        `POST /qrcode/serial` to create the QR Code.
+      operationId: gs1LookUp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GS1LookupRequest' }
+            example:
+              gtins:
+                - primary_key: "01"
+                  value: "03512345678900"
+                  key_identifiers:
+                    - { key: "10", value: "LOT42" }
+                  data_attributes:
+                    - { key: "17", value: "261231" }
+      responses:
+        '200':
+          description: The generated Digital Link paths.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GS1LookupResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /qrcode/serial:
+    post:
+      tags: [GS1 Digital Link]
+      summary: Create a GS1 Digital Link QR Code
+      description: |
+        Creates a QR Code whose short URL is a GS1 Digital Link URI. Supply
+        either a `data.short_url` containing `/01/`, or the `data.gs1` object.
+
+        The GS1 identifier path is immutable once created — the destination
+        (`data.url`) and any filters remain editable, which is what lets a
+        printed code be repointed without reprinting.
+
+        Duplicate Digital Link paths are rejected with `406`.
+      operationId: createGS1QRCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GS1QRCodeRequest' }
+            example:
+              data:
+                type: "url"
+                resolution: "dynamic-pro"
+                domain_id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+                url: "https://brand.example/products/welcome"
+                gs1:
+                  gtin: "03512345678900"
+                  batch: "LOT42"
+              settings:
+                redundancy: "M"
+      responses:
+        '200':
+          description: QR Code created.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '406':
+          description: A QR Code already exists for this GS1 Digital Link path.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /domains:
     get:
@@ -890,6 +974,29 @@ components:
       properties:
         final_url: { type: string, format: uri, description: Destination if all statements are fulfilled. }
         statements: { type: array, items: { $ref: '#/components/schemas/Statement' } }
+        link_type:
+          type: string
+          description: |
+            Optional GS1 Web Vocabulary link type, making this filter a *typed*
+            GS1 Digital Link destination rather than a plain conditional
+            redirection. Accepts the bare token (`recipeInfo`) or the CURIE
+            form (`gs1:recipeInfo`); the bare token is stored and returned.
+
+            **GS1 only** — rejected with `400` on a QR Code that is not a GS1
+            Digital Link code. See the GS1 Digital Link section for the list of
+            accepted tokens.
+          example: "dpp"
+        active:
+          type: boolean
+          default: true
+          description: |
+            Whether the resolver may select this destination. Omitting the field
+            means "active" on create and "leave unchanged" on update, so a client
+            that does not know about this field can never switch a filter off by
+            omission. Deactivating a typed destination hands resolution over to
+            the unconditioned destination of the same link type.
+
+            Currently honoured on typed (`link_type`) destinations only.
 
     Statement:
       type: object
@@ -897,7 +1004,7 @@ components:
       properties:
         type:
           type: string
-          enum: [device, language, location_country, location_precise, time]
+          enum: [device, language, location_country, context]
         value:
           type: string
           description: |
@@ -905,6 +1012,85 @@ components:
             - device: blackberry, iphone, ipad, windows_phone, windows_tablet, windows_computer, apple_computer, android_phone, android_tablet
             - language: ISO 639-1 alpha-2 (e.g. "en")
             - location_country: ISO 3166 alpha-2 (e.g. "US")
+            - context: a GS1 audience — consumer, healthcareProfessional, patient, recycler, retailer, supplier (bare or `gs1:`-prefixed)
+
+    GS1LookupRequest:
+      type: object
+      required: [gtins]
+      properties:
+        gtins:
+          type: array
+          items:
+            type: object
+            required: [primary_key, value]
+            properties:
+              primary_key:
+                type: string
+                description: GS1 Application Identifier of the primary key. See the GS1 Digital Link section for the supported set.
+                example: "01"
+              value:
+                type: string
+                description: The identifier value. For AI `01` this must be a 14-digit GTIN with a valid mod-10 check digit; a 13-digit value is left-padded automatically.
+                example: "03512345678900"
+              key_identifiers:
+                type: array
+                description: Key qualifiers, emitted in the standard order 22 → 10 → 21 regardless of the order supplied here.
+                items: { $ref: '#/components/schemas/GS1KeyValue' }
+              data_attributes:
+                type: array
+                description: Data attributes, appended as query parameters. AIs outside the supported set are ignored.
+                items: { $ref: '#/components/schemas/GS1KeyValue' }
+
+    GS1KeyValue:
+      type: object
+      required: [key, value]
+      properties:
+        key: { type: string, description: GS1 Application Identifier., example: "10" }
+        value: { type: string, example: "LOT42" }
+
+    GS1LookupResponse:
+      type: object
+      properties:
+        GS1ShortURL:
+          type: array
+          items:
+            type: object
+            properties:
+              primary_key: { type: string, example: "01" }
+              short_url:
+                type: string
+                description: The GS1 Digital Link path, without scheme or host.
+                example: "/01/03512345678900/10/LOT42?17=261231"
+
+    GS1QRCodeRequest:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [type, resolution]
+          properties:
+            type: { type: string, enum: [url], description: Only URL-type QR Codes may carry a GS1 Digital Link. }
+            resolution: { type: string, enum: [dynamic, dynamic-pro] }
+            domain_id: { type: string, format: uuid, description: Required for `dynamic-pro`. Your own resolver domain. }
+            url: { type: string, format: uri, description: The default destination the code resolves to. }
+            short_url:
+              type: string
+              description: |
+                Optional. A full GS1 Digital Link path, used verbatim. When it
+                contains `/01/` it takes precedence over the `gs1` object and is
+                parsed as the canonical source. **This is the only way to supply
+                data attributes** (e.g. `?17=261231`) on this endpoint.
+              example: "/01/03512345678900/10/LOT42?17=261231"
+            gs1:
+              type: object
+              description: The GS1 identifier tuple. Ignored when `short_url` contains `/01/`.
+              properties:
+                gtin: { type: string, description: 14-digit GTIN with a valid mod-10 check digit., example: "03512345678900" }
+                cpv: { type: string, description: "Consumer product variant (AI 22).", example: "" }
+                batch: { type: string, description: "Batch / lot (AI 10).", example: "LOT42" }
+                serial: { type: string, description: "Serial (AI 21).", example: "" }
+        settings: { $ref: '#/components/schemas/QRSettings' }
 
     Domain:
       type: object
