@@ -41,6 +41,14 @@ tags:
       Build and create GS1 Digital Link QR Codes, and expose several typed
       destinations behind a single printed code. Unitag operates a
       GS1-certified Conformant Resolver (standard v1.2.0).
+  - name: Scheduling
+    description: |
+      Change a QR Code or packaging product's destination at a given date and
+      time. A schedule rewrites the destination once when the moment arrives —
+      it is not a scan-time condition, and filters are unaffected.
+
+      Served on a dedicated host; authenticated with the same `X-Unitag-ApiKey`
+      header as the rest of this API.
   - name: Domain Names
     description: Use your own domain with Dynamic Pro QR Codes (Gold plan and up).
   - name: Campaigns
@@ -544,6 +552,141 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /schedules:
+    servers:
+      - url: https://scheduler-api.unitag.io
+        description: Production (also reachable at https://api-v2.unitag.io/_b/scheduler)
+      - url: https://scheduler-api.sandbox.unitag.io
+        description: Sandbox
+    post:
+      tags: [Scheduling]
+      summary: Create a schedule
+      description: |
+        Schedules up to three future destination changes for a QR Code or
+        packaging product.
+
+        Constraints: maximum 3 rules per schedule; only one active schedule per
+        target at a time; the target must belong to your organisation;
+        `trigger_at` must be in the future.
+
+        Rules are applied by a background job running every few seconds, so a
+        change takes effect within seconds of `trigger_at` rather than exactly
+        on it.
+      operationId: createSchedule
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateScheduleRequest' }
+            example:
+              target_type: "qrcode"
+              target_id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+              rules:
+                - trigger_at: "2026-12-24T23:00:00Z"
+                  destination_url: "https://brand.example/christmas"
+                  position: 1
+      responses:
+        '200':
+          description: Schedule created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/AuthUnavailable' }
+        '403':
+          description: The target does not exist or does not belong to your organisation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    get:
+      tags: [Scheduling]
+      summary: List schedules
+      operationId: listSchedules
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200':
+          description: Paginated schedules for the organisation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/AuthUnavailable' }
+
+  /schedules/{schedule_id}:
+    servers:
+      - url: https://scheduler-api.unitag.io
+        description: Production (also reachable at https://api-v2.unitag.io/_b/scheduler)
+      - url: https://scheduler-api.sandbox.unitag.io
+        description: Sandbox
+    parameters:
+      - name: schedule_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Scheduling]
+      summary: Retrieve a schedule
+      operationId: getSchedule
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The schedule and its rules.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/AuthUnavailable' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Scheduling]
+      summary: Update a schedule
+      description: Replaces all rules on the schedule.
+      operationId: updateSchedule
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateScheduleRequest' }
+            example:
+              rules:
+                - trigger_at: "2026-12-25T23:00:00Z"
+                  destination_url: "https://brand.example/boxing-day"
+                  position: 1
+      responses:
+        '200':
+          description: Schedule updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/AuthUnavailable' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Scheduling]
+      summary: Delete a schedule
+      description: |
+        Deletes the schedule and all its rules. Rules that have already fired
+        are not rolled back — the destination stays where it was last set.
+      operationId: deleteSchedule
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Schedule deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/AuthUnavailable' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /domains:
     get:
       tags: [Domain Names]
@@ -797,8 +940,13 @@ components:
       in: header
       name: X-Unitag-ApiKey
       description: API key generated from the dashboard (Settings → API), scoped to one environment.
-
   parameters:
+    OrgId:
+      name: X-Unitag-Org-Id
+      in: header
+      required: false
+      description: Organisation UUID. Falls back to the API key's owner for standalone accounts.
+      schema: { type: string, format: uuid }
     QRCodeId:
       name: qrcode_id
       in: path
@@ -829,6 +977,13 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     TooManyRequests:
       description: Rate limit exceeded. Counters reset daily at 00:00 GMT.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    AuthUnavailable:
+      description: |
+        The API key could not be verified. The key may be perfectly valid — retry.
+        A `401` always means the key itself was rejected.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1091,6 +1246,89 @@ components:
                 batch: { type: string, description: "Batch / lot (AI 10).", example: "LOT42" }
                 serial: { type: string, description: "Serial (AI 21).", example: "" }
         settings: { $ref: '#/components/schemas/QRSettings' }
+
+    CreateScheduleRequest:
+      type: object
+      required: [target_id, rules]
+      properties:
+        target_type:
+          type: string
+          enum: [qrcode, packaging_product]
+          default: qrcode
+        target_id: { type: string, format: uuid, description: UUID of the QR Code or packaging product. }
+        qr_code_id: { type: string, format: uuid, description: Legacy alias for `target_id` on `qrcode` targets. }
+        rules:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/ScheduleRuleInput' }
+
+    UpdateScheduleRequest:
+      type: object
+      required: [rules]
+      description: Replaces all rules on the schedule. Send the complete set, not just the changed ones.
+      properties:
+        rules:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/ScheduleRuleInput' }
+
+    ScheduleRuleInput:
+      type: object
+      required: [trigger_at, destination_url, position]
+      properties:
+        trigger_at:
+          type: string
+          format: date-time
+          description: When the change applies (RFC 3339). Must be in the future at creation.
+          example: "2026-12-24T23:00:00Z"
+        destination_url:
+          type: string
+          format: uri
+          description: The new destination. Must be `https://` for packaging-product targets.
+        position: { type: integer, minimum: 1, maximum: 3 }
+
+    Schedule:
+      type: object
+      properties:
+        id: { type: integer }
+        uuid: { type: string, format: uuid }
+        organisation_id: { type: string, format: uuid }
+        target_type: { type: string, enum: [qrcode, packaging_product] }
+        target_id: { type: string, format: uuid }
+        qr_code_id: { type: string, format: uuid, description: Echoed for `qrcode` targets. }
+        status:
+          type: string
+          enum: [pending, active, expired]
+          description: Derived from the rules — `pending` (none fired), `active` (some fired), `expired` (all fired).
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        rules:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleRule' }
+
+    ScheduleRule:
+      type: object
+      properties:
+        id: { type: integer }
+        uuid: { type: string, format: uuid }
+        trigger_at: { type: string, format: date-time }
+        destination_url: { type: string, format: uri }
+        position: { type: integer }
+        fired_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null until the rule has been applied.
+
+    ScheduleList:
+      type: object
+      properties:
+        schedules: { type: array, items: { $ref: '#/components/schemas/Schedule' } }
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
 
     Domain:
       type: object
