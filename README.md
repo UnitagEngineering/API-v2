@@ -92,15 +92,24 @@ All requests and responses of *Content-Type* *application/json* and follow typic
 
 #### Errors
 
-Unless otherwise stated, errors to bad requests will respond with HTTP 4xx or status codes. The body will also contain a message parameter indicating the cause.
+Every non-2xx response is `application/json` and carries the same body:
 
-| Status Code | Reason |
-| --- | --- |
-| 400 | Bad Request - Invalid request format |
-| 401 | Unauthorized - Bad API key |
-| 403 | Forbidden - Insufficient rights or credits to perform the operation |
-| 404 | Not found - The resource cannot be found for the user |
-| 500 | Internal error - Please contact our support |
+```json
+{ "error_code": "NOT_FOUND", "message": "qrcodes not found" }
+```
+
+Switch on `error_code` — it is a stable value. `message` is human-readable prose and may be reworded without notice.
+
+| Status Code | Reason | `error_code` |
+| --- | --- | --- |
+| 400 | Bad Request - Invalid request format | `BAD_REQUEST` |
+| 401 | Unauthorized - Bad API key | `UNAUTHORIZED` |
+| 403 | Forbidden - Insufficient rights or credits to perform the operation | `FORBIDDEN`, `UPGRADE_NEEDED`, `PLAN_LIMIT` |
+| 404 | Not found - The resource cannot be found for the user | `NOT_FOUND` |
+| 429 | Too many requests - Rate limit or monthly quota exceeded | `TOO_MANY_REQUESTS` |
+| 500 | Internal error - Please contact our support | `INTERNAL_ERROR` |
+
+Business conditions carry their own `error_code` alongside the generic one for the status — `UPGRADE_NEEDED` for a plan that does not cover the feature, for example.
 
 #### Successes
 
