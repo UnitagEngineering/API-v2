@@ -17,6 +17,11 @@ info:
 
     ## IDs
     Most identifiers are RFC 4122 UUIDs, e.g. `f81d4fae-7dec-11d0-a765-00a0c91e6bf6`.
+
+    ## Errors
+    Every non-2xx response is `application/json` and carries the same object:
+    `{"error_code": "...", "message": "..."}`. `error_code` is a stable value you
+    can switch on; `message` is prose and may be reworded without notice.
   contact:
     name: Unitag Support
     url: https://unitag.io
@@ -149,7 +154,7 @@ paths:
           description: The QR Code resource.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { $ref: '#/components/schemas/QRCodeDetail' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
@@ -158,10 +163,10 @@ paths:
       operationId: deleteQRCode
       responses:
         '200':
-          description: QR Code deleted.
+          description: QR Code deleted. The body is JSON `null`.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { type: "null" }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -172,7 +177,10 @@ paths:
       operationId: listQRCodes
       parameters:
         - { name: page, in: query, schema: { type: integer, default: 1 } }
-        - { name: maxRows, in: query, schema: { type: integer, default: 5 } }
+        - name: maxRows
+          in: query
+          description: Page size. Any positive value is accepted; omitted means 5.
+          schema: { type: integer, default: 5, minimum: 1 }
         - name: sortField
           in: query
           schema: { type: string, enum: [Label, Destination, Campaign, Organisation, creation_date, short_url], default: creation_date }
@@ -190,7 +198,7 @@ paths:
           description: A page of QR Codes.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { $ref: '#/components/schemas/QRCodeListPage' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /qrcode/{qrcode_id}/url:
@@ -216,7 +224,7 @@ paths:
           description: URL updated.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { $ref: '#/components/schemas/UpdateQRCodeResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -302,10 +310,10 @@ paths:
       operationId: listTemplates
       responses:
         '200':
-          description: Array of template objects (UUID, name, design).
+          description: Array of template objects.
           content:
             application/json:
-              schema: { type: array, items: { type: object, additionalProperties: true } }
+              schema: { type: array, items: { $ref: '#/components/schemas/Template' } }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /qrcode/{qrcode_id}/template:
@@ -375,10 +383,10 @@ paths:
       operationId: deleteTemplate
       responses:
         '200':
-          description: Template deleted.
+          description: Template deleted. The body is JSON `null`.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { type: "null" }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -403,7 +411,7 @@ paths:
           description: Filter created.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { $ref: '#/components/schemas/CreateFilterResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -417,10 +425,10 @@ paths:
       operationId: listFilters
       responses:
         '200':
-          description: Array of filters.
+          description: The QR Code's filters, wrapped in a `filters` envelope.
           content:
             application/json:
-              schema: { type: array, items: { type: object, additionalProperties: true } }
+              schema: { $ref: '#/components/schemas/FilterList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -542,7 +550,7 @@ paths:
           description: QR Code created.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema: { $ref: '#/components/schemas/CreateQRCodeResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -991,8 +999,171 @@ components:
   schemas:
     Error:
       type: object
+      description: |
+        Every error response — including `401` — uses this envelope, with
+        `Content-Type: application/json`.
+
+        Switch on `error_code`, not on `message`: the code is a stable contract,
+        the message is prose and may be reworded at any time.
+      required: [error_code, message]
       properties:
+        error_code:
+          type: string
+          description: |
+            Stable machine-readable code. Generic codes mirror the status
+            (`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
+            `NOT_ACCEPTABLE`, `CONFLICT`, `TOO_MANY_REQUESTS`, `INTERNAL_ERROR`);
+            business conditions carry their own, e.g. `UPGRADE_NEEDED`,
+            `PLAN_LIMIT`, `wrong_plan`.
+          examples: [NOT_FOUND, UPGRADE_NEEDED]
         message: { type: string, description: Human-readable cause of the error. }
+      examples:
+        - { error_code: "NOT_FOUND", message: "qrcodes not found" }
+
+    QRCodeListPage:
+      type: object
+      description: One page of QR Codes. `total_records` counts every match, not just this page.
+      properties:
+        total_records: { type: integer, description: Total matching QR Codes across all pages. }
+        records:
+          type: array
+          items: { $ref: '#/components/schemas/QRCodeListRecord' }
+
+    QRCodeListRecord:
+      type: object
+      description: |
+        A QR Code as returned by the list endpoint.
+
+        Note the field names differ from `GET /qrcode/{qrcode_id}` for the same
+        underlying data: `uuid` here is `qrcode_uuid` there, `resolution_type`
+        is `resolution`, and `creation_date`/`update_date` are
+        `created_at`/`updated_at`.
+      properties:
+        uuid: { type: string, format: uuid }
+        label: { type: string }
+        type:
+          type: string
+          description: |
+            Application that owns the code. Wider than the `QRData.type` enum
+            used on creation — observed values include `qrcode`, `packaging`,
+            `vcard`, `wifi`, `document` and `email`.
+        resolution_type: { type: string, enum: [dynamic, dynamic-pro, static] }
+        short_url: { type: string, description: The scannable resolution URL. }
+        full_url: { type: string, description: Current destination. }
+        owner_email: { type: string }
+        activated: { type: boolean }
+        deactivation_reason: { type: string }
+        creation_date: { type: string, format: date-time }
+        update_date: { type: string, format: date-time }
+        batch_id: { type: integer }
+        data: { type: string, description: "Type-specific payload, serialised as a JSON string." }
+        healthcheck_interval: { type: integer, format: int64 }
+        healthcheck_expected_status: { type: integer }
+        design: { type: object, description: Design document attached to the code. }
+        filters:
+          type: array
+          items: { $ref: '#/components/schemas/EmbeddedFilter' }
+        labels: { type: array, items: { type: object } }
+        tags: { type: array, items: { type: object } }
+        gs1: { type: object, description: GS1 identifiers; present only on Digital Link codes. }
+        Owner: { type: object, description: Owning account. }
+        Campaign: { type: object, description: Campaign the code belongs to. }
+        organisation: { type: object }
+
+    QRCodeDetail:
+      type: object
+      description: |
+        A single QR Code. Field names differ from the list endpoint — see
+        `QRCodeListRecord`.
+      properties:
+        qrcode_uuid: { type: string, format: uuid }
+        label: { type: string }
+        type: { type: string, description: "See QRCodeListRecord.type." }
+        resolution: { type: string, enum: [dynamic, dynamic-pro, static] }
+        short_url: { type: string }
+        full_url: { type: string }
+        domain_uuid: { type: string, description: Empty unless the code is Dynamic Pro. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        campaign: { type: object, description: Campaign the code belongs to. }
+        owner: { type: object, description: Owning account. }
+        design: { $ref: '#/components/schemas/QRSettings' }
+        filters:
+          type: array
+          items: { $ref: '#/components/schemas/EmbeddedFilter' }
+        labels: { type: array, items: { type: object } }
+        tags: { type: array, items: { type: object } }
+
+    EmbeddedFilter:
+      type: object
+      description: |
+        A filter as embedded in a QR Code payload. The dedicated
+        `GET /qrcode/{qrcode_id}/filters` endpoint names the same two fields
+        `uuid` and `statements` — see `Filter`.
+      properties:
+        filter_uuid: { type: string, format: uuid }
+        final_url: { type: string }
+        filter_value:
+          type: array
+          items: { $ref: '#/components/schemas/Statement' }
+        link_type: { type: string, description: "GS1 Web Vocabulary link type, when typed." }
+        active: { type: boolean }
+
+    FilterList:
+      type: object
+      description: |
+        Envelope returned by `GET /qrcode/{qrcode_id}/filters`. A QR Code with
+        no filters returns an empty array, never `null`.
+      required: [filters]
+      properties:
+        filters:
+          type: array
+          items: { $ref: '#/components/schemas/Filter' }
+
+    Filter:
+      type: object
+      description: A filter as returned by the dedicated filters endpoint.
+      properties:
+        uuid: { type: string, format: uuid }
+        final_url: { type: string }
+        statements:
+          type: array
+          items: { $ref: '#/components/schemas/Statement' }
+        order: { type: integer, description: Evaluation order; lowest first. }
+        link_type: { type: string, description: "GS1 Web Vocabulary link type, when typed." }
+        active: { type: boolean, description: Whether the resolver may select this destination. }
+
+    CreateFilterResponse:
+      type: object
+      description: Echo of the filter just created.
+      properties:
+        status: { type: string, examples: [created] }
+        filter_id: { type: string, format: uuid }
+        final_url: { type: string }
+        link_type: { type: string }
+        active: { type: boolean }
+
+    Template:
+      type: object
+      description: |
+        A saved design template. Alongside `uuid`/`name`/`design` the record
+        carries ORM bookkeeping fields (`ID`, `CreatedAt`, `UpdatedAt`,
+        `DeletedAt`) that are not part of the contract.
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        design: { type: object, description: Design document; same shape as QRSettings. }
+        owner: { type: object }
+        CreatedAt: { type: string, format: date-time }
+        UpdatedAt: { type: string, format: date-time }
+
+    UpdateQRCodeResponse:
+      type: object
+      properties:
+        status: { type: string, examples: [updated] }
+        qrcode_id: { type: string, format: uuid }
+        content_url: { type: string, description: Resolution URL (your domain if Dynamic Pro). }
+        qrcode_image_url: { type: string, format: uri, description: QR Code image on the Unitag CDN. }
 
     QRCodeRequest:
       type: object
@@ -1007,7 +1178,12 @@ components:
       properties:
         type: { type: string, enum: [url, vcard], description: Type of QR Code. }
         resolution: { type: string, enum: [dynamic, dynamic-pro, static], description: Resolution mode. }
-        url: { type: string, format: uri, description: Destination URL on scan. }
+        url:
+          type: string
+          format: uri
+          description: >-
+            Destination URL on scan. Required and non-empty when `type` is
+            `url`; a request omitting it is rejected with `400`.
         label: { type: string, description: Name for your QR Code. }
         domain_id: { type: string, format: uuid, description: Required when resolution is "dynamic-pro". }
         preferred_short_url: { type: string, description: "Custom short URL segment (alphanumeric, no special characters)." }
@@ -1394,38 +1570,51 @@ components:
 
     AnalyticsResponse:
       type: object
+      description: |
+        A window with no scans returns empty arrays (`[]`), never `null`.
       properties:
         histogram:
           type: array
+          description: Scans per day over the requested window.
           items:
             type: object
             properties:
-              date: { type: integer, format: int64, description: Epoch ms. }
-              count: { type: integer }
-        visits_count: { type: integer }
-        visits_count_comparison: { type: integer }
-        unique_visitors_count: { type: integer }
-        unique_visitors_count_comparison: { type: integer }
+              date: { type: number, description: Epoch ms. }
+              count: { type: integer, format: int64 }
+        visits_count: { type: number, description: Scans in the window. }
+        visits_count_comparison: { type: number, description: Scans in the preceding window of equal length. }
+        unique_visitors_count: { type: number }
+        unique_visitors_count_comparison: { type: number }
         countries_histogram:
           type: array
+          description: Scans per country, descending by count.
           items:
             type: object
             properties:
               country_iso: { type: string }
-              count: { type: integer }
+              count: { type: integer, format: int64 }
         visits_history: { $ref: '#/components/schemas/VisitsHistory' }
 
     VisitsHistory:
       type: object
+      description: |
+        Individual scan records. `visits` is an empty array, never `null`, when
+        the window contains no scans.
       properties:
-        cursor_id: { type: string }
+        cursor_id:
+          type: string
+          description: >-
+            Pass back on the next request to continue the scroll. Empty once
+            exhausted — the same signal as `has_more: false`.
+        has_more: { type: boolean, description: Whether more records remain beyond this batch. }
+        total: { type: integer, format: int64, description: Total matching scan records. }
         visits:
           type: array
           items:
             type: object
             properties:
               date: { type: integer, format: int64, description: Epoch ms. }
-              label: { type: string }
+              label: { type: string, description: Label of the QR Code scanned. }
               country_iso: { type: string }
               city_iso: { type: string }
-              model: { type: string }
+              model: { type: string, description: Device model. }
