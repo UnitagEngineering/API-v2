@@ -523,7 +523,7 @@ Example
   "status": "created",
   "qrcode_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
   "content_url": "https://qrcode.link/a/f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
-  "qr_code_image_url": "https://cdn-public.unitag.io/aaaaaaa-7dec-11d0-a765-00a0c91e6bf6/preview.png"
+  "qrcode_image_url": "https://cdn-public.unitag.io/aaaaaaa-7dec-11d0-a765-00a0c91e6bf6/preview.png"
 }
 ```
 
@@ -532,7 +532,8 @@ Example
 | status | string | Status of the QR Code, one of "created, updated"                           |
 | qrcode_id | string | ID of the QR Code created                                                  |
 | content_url | string | Resolution URL, your own domain name if resolution is set to "dynamic-pro" |
-| qr_code_image_url | string | QR Code image available from our CDN                                       |
+| short_url | string | Repeats content_url. Populated by `POST /qrcode/serial`; empty on this endpoint |
+| qrcode_image_url | string | QR Code image available from our CDN                                       |
 
 ---
 

@@ -1273,7 +1273,13 @@ components:
         status: { type: string, enum: [created, updated] }
         qrcode_id: { type: string, format: uuid }
         content_url: { type: string, format: uri, description: Resolution URL (your domain if Dynamic Pro). }
-        qr_code_image_url: { type: string, format: uri, description: QR Code image on the Unitag CDN. }
+        short_url:
+          type: string
+          description: >-
+            Resolution URL, repeating `content_url`. Populated by
+            `POST /qrcode/serial`; always empty on `POST /qrcode`, which returns
+            the value in `content_url` only.
+        qrcode_image_url: { type: string, format: uri, description: QR Code image on the Unitag CDN. }
 
     DownloadSingleRequest:
       type: object
