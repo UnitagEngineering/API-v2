@@ -66,6 +66,11 @@ https://api-v2.sandbox.unitag.io
   * [Register a domain](#register-a-domain-name)
   * [Validate a domain](#validate-a-domain-name)
   * [Retrieve domains](#list-all-domain-names-available)
+  * [Retrieve a domain](#retrieve-a-domain-name)
+  * [Retrieve DNS configuration](#retrieve-a-domains-dns-configuration)
+  * [Set kind and region](#set-a-domains-kind-and-region)
+  * [Share a domain](#share-a-domain-name)
+  * [Delete a domain](#delete-a-domain-name)
 * [Campaigns](#campaigns)
   * [List campaigns](#list-campaigns)
   * [Create a campaign](#create-a-campaign)
@@ -77,6 +82,52 @@ https://api-v2.sandbox.unitag.io
   * [Retrieve aggregated stats](#retrieve-qr-codes-aggregated-stats)
   * [Retrieve visit records](#retrieve-visit-records)
   * [Export analytics](#export-analytics)
+  * [Retrieve vCard Pro stats](#retrieve-vcard-pro-aggregated-stats)
+  * [Retrieve an organisation's stats](#retrieve-an-organisations-aggregated-stats)
+  * [Retrieve one account holder's stats](#retrieve-one-account-holders-aggregated-stats)
+* [Business Intelligence](#business-intelligence)
+  * [Organisation scorecard](#organisation-scorecard)
+  * [What drives your scans](#what-drives-your-scans)
+  * [Scans per campaign](#scans-per-campaign)
+  * [One campaign's detail](#one-campaigns-scorecard-and-drivers)
+  * [Content insights](#scans-by-content-category-audience-and-language)
+  * [Scans over time](#scans-over-time)
+  * [Where your scans come from](#where-your-scans-come-from)
+  * [Visitor behaviour](#visitor-behaviour)
+  * [Outlying QR codes](#over--and-under-performing-qr-codes)
+  * [Traffic quality](#bot-share-and-traffic-anomalies)
+  * [Risk exposure](#qr-codes-flagged-as-risky)
+  * [Sector benchmark](#compare-with-your-sector)
+* [Audit](#audit)
+  * [Organisation audit events](#list-an-organisations-audit-events)
+  * [User audit events](#list-one-users-audit-events)
+  * [Entity audit events](#list-one-entitys-audit-events)
+  * [Export audit events](#export-audit-events)
+* [Labels](#labels)
+  * [List labels](#list-labels)
+  * [Retrieve a label](#retrieve-a-label)
+  * [Create a label](#create-a-label)
+  * [Update a label](#update-a-label)
+  * [Count QR codes per label](#count-qr-codes-per-label)
+  * [Delete a label](#delete-a-label)
+* [Groups](#groups)
+  * [List groups](#list-groups)
+  * [Retrieve a group](#retrieve-a-group)
+  * [Create a group](#create-a-group)
+  * [Update a group](#update-a-group)
+  * [Delete a group](#delete-a-group)
+* [vCards](#vcards)
+  * [List vCards](#list-vcards)
+  * [Create a vCard](#create-a-vcard)
+* [Assets](#assets)
+  * [Upload an asset](#upload-an-asset)
+  * [Excavate a logo](#excavate-a-logo)
+  * [List batch bundles](#list-batch-bundles)
+  * [Delete a batch bundle](#delete-a-batch-bundle)
+* [Batches](#batches)
+  * [List batches](#list-batches)
+* [Account](#account)
+  * [Retrieve your account](#retrieve-your-account)
 
 ## API
 
@@ -1652,6 +1703,174 @@ NB: As an owner of a domain name more fields might be added if you have shared t
 
 ---
 
+### Retrieve a domain name
+
+Retrieve a single domain and the DNS entry it expects
+
+**Request**
+
+```GET /domains/<domain_id>```
+
+**Response**
+
+```json
+{
+  "domain_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "domain_name": "qr.example.org",
+  "dns_entry_type": "CNAME",
+  "dns_entry": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6.qrcode.link"
+}
+```
+
+*Data* object:
+
+| field | type | description |
+| --- | --- | --- |
+| domain_uuid | string | The ID of the domain |
+| domain_name | string | The domain name as string |
+| dns_entry_type | string | Always CNAME |
+| dns_entry | string | The value to point the record at |
+
+> NB: This endpoint always reports a CNAME. If your domain is an APEX it needs A
+> records instead — use [Retrieve a domain's DNS configuration](#retrieve-a-domains-dns-configuration).
+
+---
+
+### Retrieve a domain's DNS configuration
+
+Retrieve every DNS record your domain expects, together with its live status
+
+**Request**
+
+```GET /domains/<domain_id>/config```
+
+**Response**
+
+```json
+{
+  "domain_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "domain_name": "example.org",
+  "domain_type": "APEX",
+  "record_type": "A",
+  "records": ["1.2.3.4", "5.6.7.8"],
+  "registrar_family": "gandi",
+  "status": "OK",
+  "activated": true,
+  "ssl_activated": true
+}
+```
+
+*Data* object:
+
+| field | type | description |
+| --- | --- | --- |
+| domain_id | string | The ID of the domain |
+| domain_name | string | The domain name as string |
+| domain_type | string | Either APEX or SUBDOMAIN |
+| record_type | string | A for an APEX domain, CNAME for a subdomain |
+| records | []string | Create one record_type record per value. Empty until the domain is configured |
+| registrar_family | string | Detected registrar, used to pick a setup guide. `unknown` when it could not be determined |
+| status | string | Result of the live DNS check. `UNKNOWN` when the check is unavailable — the records are still correct |
+| activated | boolean | Status of the domain name |
+| ssl_activated | boolean | Status of the SSL service |
+
+An APEX domain returns one A record per region you have enabled, and every one
+of them must exist in your DNS zone:
+
+```example.org A 1.2.3.4```  
+```example.org A 5.6.7.8```
+
+---
+
+### Set a domain's kind and region
+
+Set whether the domain is an APEX or a subdomain, and which region should serve it
+
+**Request**
+
+```PUT /domains/<domain_id>/config```
+
+```json
+{
+  "type": "SUBDOMAIN",
+  "region": "eu"
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| type | string | true | APEX or SUBDOMAIN |
+| region | string | true | eu, na, or all to serve from every region |
+
+Both values are matched case-insensitively.
+
+**Response**
+
+```json
+{
+  "domain_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "type": "SUBDOMAIN",
+  "region": "eu",
+  "cdn_regions": ["eu"]
+}
+```
+
+*Data* object:
+
+| field | type | description |
+| --- | --- | --- |
+| domain_id | string | The ID of the domain |
+| type | string | The kind that was persisted |
+| region | string | The region that was persisted |
+| cdn_regions | []string | The regions the domain is actually served from. `all` expands to every region |
+
+> NB: Changing either value changes the DNS records the domain expects. Read the
+> configuration again afterwards and update your registrar to match.
+
+---
+
+### Share a domain name
+
+Share a domain with other accounts or organisations
+
+**Request**
+
+```PUT /domains/<domain_id>```
+
+```json
+{
+  "users_ids": [],
+  "orgs_ids": ["f81d4fae-7dec-11d0-a765-00a0c91e6bf6"],
+  "is_shared_with_orgs": true
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| users_ids | []string | false | Accounts the domain is shared with |
+| orgs_ids | []string | false | Organisations the domain is shared with |
+| is_shared_with_orgs | boolean | false | Whether the domain is shared at organisation level |
+
+> NB: Both lists are absolute. Whatever you send becomes the new set, so an
+> omitted or empty array clears the sharing rather than leaving it untouched.
+
+---
+
+### Delete a domain name
+
+**Request**
+
+```DELETE /domains/<domain_id>```
+
+**Response**
+
+HTTP code 200
+
+> NB: QR Codes pointing at this domain keep their short URL but stop resolving on
+> it. Remember to remove the DNS records from your registrar as well.
+
+---
+
 ## Campaigns
 
 The campaigns endpoint allows you to work around the campaign management tool, helping you to sort your QR codes.
@@ -1961,3 +2180,1187 @@ Uses the same request body format as the aggregated stats endpoint. Add `time_zo
 **Response**
 
 Binary file (Excel .xlsx spreadsheet)
+
+---
+
+### Retrieve vCard Pro aggregated stats
+
+Retrieve aggregated stats for your vCard Pro assets
+
+**Request**
+
+```POST /analytics/vcards_pro/search```
+
+Uses the same request body and returns the same response shape as the aggregated
+stats endpoint.
+
+```json
+{
+  "filters": []
+}
+```
+
+> NB: This endpoint always reports the last hour. Any `time_range` you send is
+> ignored — it answers "what is happening right now".
+
+---
+
+### Retrieve an organisation's aggregated stats
+
+Retrieve aggregated stats scoped to a single organisation
+
+**Request**
+
+```POST /analytics/orgs/<org_uuid>/search```
+
+Uses the same request body and returns the same response shape as the aggregated
+stats endpoint.
+
+```json
+{
+  "time_range": {
+    "type": 1,
+    "number": 2,
+    "unit": "weeks"
+  }
+}
+```
+
+> NB: If your role only grants you access to your own assets, the answer is
+> narrowed to those rather than refused.
+
+---
+
+### Retrieve one account holder's aggregated stats
+
+Retrieve aggregated stats for the assets owned by one member of your organisation
+
+**Request**
+
+```POST /analytics/owners/<owner_uuid>/search```
+
+Uses the same request body and returns the same response shape as the aggregated
+stats endpoint.
+
+---
+
+## Business Intelligence
+
+Organisation-wide reporting: how your estate is performing, what is driving
+scans, where they come from, and how you compare with your sector.
+
+Every endpoint below is scoped to one organisation and accepts the same optional
+window:
+
+| parameter | type | description |
+| --- | --- | --- |
+| from | string | Start of the window, ISO 8601. Omit for the default lookback |
+| to | string | End of the window, ISO 8601 |
+
+Every response carries `truncated`. When it is `true` your estate was too large
+to analyse in full and the figures come from a subset — read them as indicative
+rather than exact.
+
+### Organisation scorecard
+
+The headline numbers for an organisation
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/scorecard?from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "org_name": "Example Ltd",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "total_scans": 15234,
+  "unique_visitors": 9871,
+  "mobile_share_pct": 92.4,
+  "bot_share_pct": 3.1,
+  "scans_per_qr": {
+    "count": 420,
+    "avg": 36.3,
+    "std_deviation": 88.1,
+    "min": 0,
+    "max": 1904
+  },
+  "top_countries": [
+    {"key": "FR", "doc_count": 9120},
+    {"key": "BE", "doc_count": 2311}
+  ]
+}
+```
+
+---
+
+### What drives your scans
+
+For each dimension, the values that are over-represented in your traffic compared
+with the wider population
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/drivers```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "dimensions": {
+    "country": [
+      {"key": "BE", "doc_count": 2311, "bg_count": 40122, "score": 4.7}
+    ],
+    "device": [
+      {"key": "tablet", "doc_count": 611, "bg_count": 9033, "score": 2.2}
+    ]
+  }
+}
+```
+
+*Bucket* object:
+
+| field | type | description |
+| --- | --- | --- |
+| key | string | The value |
+| doc_count | integer | Occurrences in your traffic |
+| bg_count | integer | Occurrences in the background population |
+| score | number | How over-represented the value is. Higher is more significant |
+
+---
+
+### Scans per campaign
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/campaigns```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "org_name": "Example Ltd",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "truncated": false,
+  "campaigns": [
+    {
+      "campaign_uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+      "name": "Summer 2026",
+      "qr_count": 120,
+      "scans": 8801
+    }
+  ]
+}
+```
+
+---
+
+### One campaign's scorecard and drivers
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/campaign/<campaign_uuid>```
+
+**Response**
+
+```json
+{
+  "scorecard": { "...": "same shape as the organisation scorecard" },
+  "drivers": { "...": "same shape as the drivers report" }
+}
+```
+
+---
+
+### Scans by content category, audience and language
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/content-insights```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "analyzed_qrs": 388,
+  "coverage_pct": 92.4,
+  "by_category": [{"key": "retail", "scans": 6120, "qr_count": 141}],
+  "by_audience": [{"key": "consumer", "scans": 11021, "qr_count": 302}],
+  "by_language": [{"key": "fr", "scans": 9120, "qr_count": 255}]
+}
+```
+
+Only QR Codes whose content has been classified are counted. `coverage_pct` tells
+you how much of your estate that is.
+
+---
+
+### Scans over time
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/timeline?interval=1d```
+
+| parameter | type | description |
+| --- | --- | --- |
+| interval | string | Bucket size for the series. Defaults to a size chosen from the window length |
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "interval": "1d",
+  "total_scans": 15234,
+  "growth_pct": 12.8,
+  "peak": {"timestamp": 1755993600000, "date": "2026-08-24", "scans": 1204},
+  "series": [{"timestamp": 1754006400000, "date": "2026-08-01", "scans": 411}],
+  "by_day_of_week": [{"weekday": "Saturday", "scans": 3120}],
+  "by_hour_of_day": [{"hour": 14, "scans": 1802}]
+}
+```
+
+---
+
+### Where your scans come from
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/geo```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "total_scans": 15234,
+  "distinct_countries": 18,
+  "concentration_index": 0.61,
+  "europe_share_pct": 88.2,
+  "top_countries": [{"key": "FR", "doc_count": 9120}],
+  "top_cities": [{"key": "Paris", "doc_count": 4011}]
+}
+```
+
+`concentration_index` runs from 0 to 1. Close to 1 means nearly all your scans
+come from a single country.
+
+---
+
+### Visitor behaviour
+
+New versus returning visitors, and how much each one scans
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/visitors```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "total_scans": 15234,
+  "unique_visitors": 9871,
+  "repeat_scan_ratio": 1.54,
+  "new_visitors": 7712,
+  "returning_visitors": 2159,
+  "returning_share_pct": 21.9,
+  "avg_scans_per_visitor": 1.54,
+  "max_scans_per_visitor": 87,
+  "avg_qrs_per_visitor": 1.2,
+  "sampled": false,
+  "note": ""
+}
+```
+
+Visitor counts are approximate on large estates. `sampled` tells you when they
+were computed from a sample.
+
+---
+
+### Over- and under-performing QR Codes
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/outliers```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "scanned_qrs": 388,
+  "mean_scans_per_qr": 36.3,
+  "std_deviation": 88.1,
+  "stars": [
+    {
+      "key": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+      "label": "Storefront poster",
+      "short_url": "https://unitag.io/abc123",
+      "full_url": "https://example.com/summer",
+      "scans": 1904,
+      "z_score": 21.2,
+      "reason": "far above the estate mean"
+    }
+  ],
+  "laggards": []
+}
+```
+
+`stars` are the positive outliers and `laggards` the negative ones. `z_score` is
+the distance from your estate mean in standard deviations.
+
+---
+
+### Bot share and traffic anomalies
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/traffic-quality```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "raw_scans": 15721,
+  "human_scans": 15234,
+  "bot_scans": 487,
+  "bot_share_pct": 3.1,
+  "unique_visitors": 9871,
+  "repeat_scan_ratio": 1.54,
+  "suspicious_days": [{"date": "2026-08-19", "scans": 2901, "z_score": 6.4}],
+  "top_bot_qrs": [
+    {"key": "https://unitag.io/abc123", "label": "Storefront poster", "scans": 412, "bot_share_pct": 41.2}
+  ]
+}
+```
+
+> NB: `raw_scans` counts every scan, bots included. Every other analytics endpoint
+> reports human scans only, so this is the larger number.
+
+---
+
+### QR Codes flagged as risky
+
+QR Codes whose traffic suggests abuse, ranked by how many scans are affected
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/risk-exposure```
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "qr_total": 420,
+  "truncated": false,
+  "flagged_qrs": 3,
+  "exposed_scans": 1204,
+  "total_exposure": 802.4,
+  "items": [
+    {
+      "qr_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+      "label": "Storefront poster",
+      "short_url": "https://unitag.io/abc123",
+      "full_url": "https://example.com/summer",
+      "scans": 904,
+      "fraud_confidence": 74,
+      "reason": "sustained traffic from a single network",
+      "exposure": 668.9
+    }
+  ]
+}
+```
+
+`exposure` weights the affected scans by `fraud_confidence`, so the list ranks by
+how much of your traffic is actually at stake.
+
+---
+
+### Compare with your sector
+
+**Request**
+
+```GET /analytics/bi/org/<org_uuid>/sector-benchmark?sector=retail```
+
+| parameter | type | description |
+| --- | --- | --- |
+| sector | string | Override the cohort's sector. Defaults to your organisation's own detected sector |
+
+**Response**
+
+```json
+{
+  "org_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "sector": "retail",
+  "sector_source": "declared",
+  "org_analyzed_qrs": 388,
+  "cohort_qrs": 24011,
+  "cohort_orgs": 62,
+  "cohort_sampled": false,
+  "min_cohort_met": true,
+  "scans_per_qr": {
+    "org_median": 22.0,
+    "cohort_median": 18.5,
+    "cohort_top_quartile": 41.0,
+    "delta_vs_median_pct": 18.9,
+    "delta_vs_top_quartile_pct": -46.3
+  },
+  "drivers": {
+    "country": [{"key": "BE", "doc_count": 2311, "bg_count": 40122, "score": 4.7}]
+  },
+  "note": ""
+}
+```
+
+> NB: When `min_cohort_met` is `false` the cohort was too small to be meaningful.
+> Read the comparison as indicative only.
+
+---
+
+## Audit
+
+The audit endpoints return the change history of your organisation: who changed
+what, when, and from which value to which.
+
+Listings share the same parameters:
+
+| parameter | type | description |
+| --- | --- | --- |
+| from | string | Start of the window, ISO 8601 |
+| to | string | End of the window, ISO 8601 |
+| action | string | Restrict to a single action: create, update or delete |
+| source_app | string | Restrict to events emitted by one application |
+| page | integer | 1-based page number. Defaults to 1 |
+| per_page | integer | Events per page. Defaults to 10 |
+
+### List an organisation's audit events
+
+**Request**
+
+```GET /audit/org/<org_uuid>?from=2026-08-01T00:00:00Z&per_page=25```
+
+**Response**
+
+```json
+{
+  "total": 184,
+  "page": 1,
+  "per_page": 25,
+  "events": [
+    {
+      "@timestamp": "2026-08-24T09:12:44Z",
+      "action": "update",
+      "entity_type": "qrcode",
+      "entity_uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+      "entity_label": "Storefront poster",
+      "user_uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+      "user_email": "jane@example.com",
+      "org_uuid": "c2bd62df-3642-4a93-9754-aa68f65c6622",
+      "org_name": "Example Ltd",
+      "changes": [
+        {
+          "field": "full_url",
+          "old_value": "https://example.com/spring",
+          "new_value": "https://example.com/summer"
+        }
+      ]
+    }
+  ]
+}
+```
+
+*Data* object:
+
+| field | type | description |
+| --- | --- | --- |
+| total | integer | Total matching events, not the size of this page |
+| page | integer | The page returned |
+| per_page | integer | Events per page |
+| events | []object | The events |
+
+*Event* object:
+
+| field | type | description |
+| --- | --- | --- |
+| @timestamp | string | When the change happened |
+| action | string | create, update or delete |
+| entity_type | string | What changed |
+| entity_uuid | string | The ID of the changed entity |
+| entity_label | string | Human-readable name of the entity |
+| user_uuid | string | Who made the change |
+| user_email | string | Email of the account that made the change |
+| org_uuid | string | The organisation the change belongs to |
+| org_name | string | Name of that organisation |
+| changes | []object | Field-level changes. Empty for create and delete |
+
+---
+
+### List one user's audit events
+
+**Request**
+
+```GET /audit/user/<user_uuid>```
+
+Same parameters and response shape as the organisation listing.
+
+---
+
+### List one entity's audit events
+
+The change history of a single QR Code
+
+**Request**
+
+```GET /audit/entity/<entity_uuid>```
+
+Same parameters and response shape as the organisation listing.
+
+---
+
+### Export audit events
+
+Export an audit history as a CSV file
+
+**Request**
+
+```POST /audit/org/<org_uuid>/export```
+
+The same body works against `/audit/user/<user_uuid>/export` and
+`/audit/entity/<entity_uuid>/export`.
+
+```json
+{
+  "from": "2026-08-01T00:00:00Z",
+  "to": "2026-09-01T00:00:00Z",
+  "detached": false
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| from | string | false | Start of the window, ISO 8601 |
+| to | string | false | End of the window, ISO 8601 |
+| action | string | false | Restrict to create, update or delete |
+| source_app | string | false | Restrict to events emitted by one application |
+| detached | boolean | false | Build the file in the background and email it |
+| receiver_email | string | false | Where to email the file. Required when detached is true |
+
+**Response**
+
+The CSV file. When `detached` is `true` you get `{"message": "ok"}` instead and
+the file arrives by email.
+
+---
+
+## Labels
+
+Labels are free-form tags for your QR Codes. A QR Code can carry several, and
+labels are shared across your organisation — a label created by one member is
+visible and usable by the others.
+
+### List labels
+
+**Request**
+
+```GET /labels```
+
+**Response**
+
+```json
+[
+  {
+    "ID": 12,
+    "uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "name": "Summer 2026",
+    "color": "#2B7FFF",
+    "group": {
+      "ID": 3,
+      "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+      "name": "Seasons",
+      "description": ""
+    },
+    "CreatedAt": "2026-06-01T09:00:00Z",
+    "UpdatedAt": "2026-06-01T09:00:00Z"
+  }
+]
+```
+
+*Data* []object:
+
+| field | type | description |
+| --- | --- | --- |
+| ID | integer | Internal numeric id. Address labels by uuid |
+| uuid | string | The ID of the label |
+| name | string | The label name |
+| color | string | Hex colour |
+| group | object | The group the label belongs to. Absent when ungrouped |
+
+---
+
+### Retrieve a label
+
+**Request**
+
+```GET /labels/<label_id>```
+
+**Response**
+
+Returns an array so the shape matches the listing. It holds at most one label.
+
+```json
+[
+  {
+    "ID": 12,
+    "uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "name": "Summer 2026",
+    "color": "#2B7FFF"
+  }
+]
+```
+
+---
+
+### Create a label
+
+**Request**
+
+```POST /labels```
+
+```json
+{
+  "name": "Summer 2026",
+  "color": "#2B7FFF"
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| name | string | true | The label name |
+| color | string | false | Hex colour |
+| group_uuid | string | false | Group to file the label under |
+
+**Response**
+
+```json
+{
+  "labels": [
+    {
+      "ID": 12,
+      "uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+      "name": "Summer 2026",
+      "color": "#2B7FFF"
+    }
+  ]
+}
+```
+
+---
+
+### Update a label
+
+**Request**
+
+```PUT /labels/<label_id>```
+
+```json
+{
+  "name": "Summer 2026 — EU",
+  "color": "#F97316"
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| name | string | false | The label name |
+| color | string | false | Hex colour |
+| group_uuid | string | false | Send a group ID to move the label, or an empty string to ungroup it. Omit to leave the grouping alone |
+
+**Response**
+
+Same shape as creating a label.
+
+---
+
+### Count QR Codes per label
+
+Retrieve how many QR Codes carry each label, in a single call
+
+**Request**
+
+```POST /labels/count```
+
+```json
+{
+  "label_uuids": ["f81d4fae-7dec-11d0-a765-00a0c91e6bf6"]
+}
+```
+
+**Response**
+
+```json
+{
+  "counts": {
+    "f81d4fae-7dec-11d0-a765-00a0c91e6bf6": 42
+  }
+}
+```
+
+> NB: Labels with no QR Codes are absent from `counts` rather than reported as
+> zero.
+
+---
+
+### Delete a label
+
+**Request**
+
+```DELETE /labels/<label_id>```
+
+**Response**
+
+HTTP code 204
+
+The label is removed from every QR Code carrying it. The QR Codes themselves are
+untouched.
+
+---
+
+## Groups
+
+Groups collect labels under a common name.
+
+### List groups
+
+**Request**
+
+```GET /groups```
+
+**Response**
+
+```json
+[
+  {
+    "ID": 3,
+    "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+    "name": "Seasons",
+    "description": "One label per season",
+    "labels": [
+      {
+        "ID": 12,
+        "uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+        "name": "Summer 2026",
+        "color": "#2B7FFF"
+      }
+    ]
+  }
+]
+```
+
+---
+
+### Retrieve a group
+
+**Request**
+
+```GET /groups/<group_id>```
+
+**Response**
+
+Returns an array so the shape matches the listing. It holds at most one group.
+
+---
+
+### Create a group
+
+**Request**
+
+```POST /groups```
+
+```json
+{
+  "name": "Seasons",
+  "description": "One label per season"
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| name | string | true | The group name |
+| description | string | false | Free-form description |
+
+**Response**
+
+```json
+{
+  "ID": 3,
+  "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+  "name": "Seasons",
+  "description": "One label per season",
+  "labels": []
+}
+```
+
+The group is created empty. Add labels to it with
+[Update a group](#update-a-group) or [Update a label](#update-a-label).
+
+---
+
+### Update a group
+
+**Request**
+
+```PUT /groups/<group_id>```
+
+```json
+{
+  "name": "Seasons",
+  "label_uuids": ["f81d4fae-7dec-11d0-a765-00a0c91e6bf6"]
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| name | string | false | The group name |
+| description | string | false | Free-form description |
+| label_uuids | []string | false | Replaces the group's membership |
+
+> NB: An omitted or empty `label_uuids` leaves the current membership alone. To
+> empty a group, clear each label's `group_uuid` instead.
+
+---
+
+### Delete a group
+
+**Request**
+
+```DELETE /groups/<group_id>```
+
+**Response**
+
+HTTP code 204
+
+The labels in the group survive; they simply become ungrouped.
+
+---
+
+## vCards
+
+Digital business cards, each backed by its own QR Code.
+
+### List vCards
+
+**Request**
+
+```GET /vcards```
+
+**Response**
+
+```json
+[
+  {
+    "vcard_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "qrcode_uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+    "qrcode_template_id": "",
+    "url": "https://unitag.io/contact/jane",
+    "design": "",
+    "data": "",
+    "activated": true,
+    "deactivation_reason": ""
+  }
+]
+```
+
+---
+
+### Create a vCard
+
+**Request**
+
+```POST /vcards```
+
+```json
+{
+  "url": "https://unitag.io/contact/jane",
+  "label": "Jane Doe — business card"
+}
+```
+
+| field | type | mandatory | description |
+| --- | --- | --- | --- |
+| url | string | true | Destination the vCard resolves to |
+| label | string | false | Label for the generated QR Code |
+| design | object | false | Same design object as [Create a QR Code](#create-a-qr-code). Omit to use your account default |
+
+**Response**
+
+```json
+{
+  "vcard": {
+    "vcard_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "qrcode_uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+    "url": "https://unitag.io/contact/jane",
+    "activated": true
+  },
+  "qr_code": {
+    "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+    "label": "Jane Doe — business card",
+    "resolution_type": "dynamic",
+    "short_url": "https://unitag.io/abc123",
+    "full_url": "https://unitag.io/contact/jane"
+  },
+  "qr_code_img_url": "https://assets.unitag.io/qrcodes/fd3180e2-e5e2-45ca-a8e5-b737627132bc.png"
+}
+```
+
+> NB: Creating a vCard consumes one vCard credit. The credit is refunded if
+> creation fails.
+
+---
+
+## Assets
+
+Assets are the files your QR Codes and bulk imports refer to: logos, overlays,
+media, documents and import spreadsheets.
+
+### Upload an asset
+
+Upload a file and get back the ID you reference it by
+
+**Request**
+
+```POST /asset/upload/<asset_type>```
+
+Send the file as `multipart/form-data` under the field name `File`.
+
+| path parameter | description |
+| --- | --- |
+| asset_type | One of logo, overlay, media, document, batch |
+
+| parameter | type | description |
+| --- | --- | --- |
+| vcard | boolean | Set to true to store the file against your vCard assets |
+
+Accepted content per type:
+
+| asset_type | accepted content |
+| --- | --- |
+| logo, overlay | Image formats supported by the designer |
+| media, document | Media and document formats. Removed automatically after a retention period |
+| batch | .xlsx spreadsheets only |
+
+**Response**
+
+```json
+{
+  "status": "created",
+  "asset_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+}
+```
+
+Use the returned `asset_id` in a QR Code design (for a logo or overlay) or in a
+bulk import (for a batch).
+
+> NB: Files are validated by their actual content, not by the Content-Type you
+> declare. Uploading the same file twice returns the existing asset rather than
+> creating a duplicate.
+
+---
+
+### Excavate a logo
+
+Clear the area around a logo so it sits in a clean zone when placed over a QR Code
+
+**Request**
+
+```POST /asset/excavate```
+
+Send the image as `multipart/form-data` under the field name `File`.
+
+**Response**
+
+The excavated image, in the same format you sent.
+
+Nothing is stored. Upload the result with `POST /asset/upload/logo` if you want
+to reuse it.
+
+---
+
+### List batch bundles
+
+**Request**
+
+```GET /asset/batch_bundle```
+
+**Response**
+
+```json
+[
+  {
+    "ID": 8,
+    "UUID": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "Name": "products-august.xlsx",
+    "Type": "batch",
+    "ContentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "CreatedAt": "2026-08-01T09:00:00Z",
+    "UpdatedAt": "2026-08-01T09:00:00Z"
+  }
+]
+```
+
+---
+
+### Delete a batch bundle
+
+**Request**
+
+```POST /asset/delete/batch_bundle```
+
+```json
+{
+  "asset_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+}
+```
+
+**Response**
+
+HTTP code 200
+
+---
+
+## Batches
+
+A batch is one bulk-import run: a spreadsheet of rows turned into QR Codes.
+
+### List batches
+
+Retrieve the bulk-import runs for your organisation, newest first
+
+**Request**
+
+```GET /atlas/batches```
+
+**Response**
+
+```json
+[
+  {
+    "id": 8,
+    "batch_id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+    "state": "done",
+    "type": "qrcode",
+    "number_of_assets": 250,
+    "file_uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc",
+    "started_at": "2026-08-01T09:00:00Z",
+    "finished_at": "2026-08-01T09:04:12Z",
+    "creator_email": "jane@example.com",
+    "summary": {}
+  }
+]
+```
+
+*Data* []object:
+
+| field | type | description |
+| --- | --- | --- |
+| id | integer | Internal numeric id |
+| batch_id | string | The ID of the run |
+| state | string | Where the run got to |
+| type | string | What the batch creates |
+| number_of_assets | integer | Rows the source file held |
+| file_uuid | string | The uploaded spreadsheet this run came from |
+| started_at | string | When the run started |
+| finished_at | string | When it finished. Zero-valued while still running |
+| creator_email | string | Who started the run |
+| summary | object | Per-run counters and errors. Shape depends on type |
+
+---
+
+## Account
+
+### Retrieve your account
+
+Retrieve the account your API key belongs to
+
+**Request**
+
+```GET /user```
+
+**Response**
+
+```json
+{
+  "id": 42,
+  "uuid": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "email": "jane@example.com",
+  "org": "c2bd62df-3642-4a93-9754-aa68f65c6622",
+  "org_name": "Example Ltd",
+  "organisation_role": "ADMIN",
+  "is_root_account": true,
+  "account_type": "gold",
+  "renewal_date": "2027-01-01T00:00:00Z",
+  "activated": true,
+  "deactivation_reason": "",
+  "legacy_id": 0,
+  "legacy_version": ""
+}
+```
+
+*Data* object:
+
+| field | type | description |
+| --- | --- | --- |
+| id | integer | Internal numeric id |
+| uuid | string | The ID of the account |
+| email | string | Email of the account |
+| org | string | The ID of the account's organisation |
+| org_name | string | Name of that organisation |
+| organisation_role | string | The account's role inside its organisation |
+| is_root_account | boolean | Whether this is the organisation's root account |
+| account_type | string | The subscribed plan |
+| renewal_date | string | When the subscription renews |
+| activated | boolean | Status of the account |

@@ -60,6 +60,30 @@ tags:
     description: Organise QR Codes into campaigns and sub-campaigns.
   - name: Analytics
     description: Aggregated stats, visit records and exports for your QR Codes.
+  - name: Business Intelligence
+    description: |
+      Organisation-wide reporting: scorecards, what drives scans, timelines,
+      geography, visitor behaviour, outliers, traffic quality and sector
+      benchmarks. Every endpoint is scoped to one organisation and takes the
+      same optional `from`/`to` window.
+  - name: Audit
+    description: |
+      The change history of your organisation, its members and individual
+      assets — who changed what, when, and from which value to which.
+  - name: Labels
+    description: |
+      Free-form tags for QR Codes. Labels are shared across the organisation,
+      and a QR Code can carry several.
+  - name: Groups
+    description: Collect labels into named groups.
+  - name: vCards
+    description: Digital business cards, each backed by its own QR Code.
+  - name: Assets
+    description: Upload and manage the logos, overlays, media and spreadsheets your QR Codes and imports refer to.
+  - name: Batches
+    description: Bulk creation of QR Codes from a spreadsheet.
+  - name: Account
+    description: The account your API key belongs to.
 
 paths:
   /qrcodes/preview:
@@ -501,7 +525,7 @@ paths:
             example:
               gtins:
                 - primary_key: "01"
-                  value: "03512345678900"
+                  value: "03512345678907"
                   key_identifiers:
                     - { key: "10", value: "LOT42" }
                   data_attributes:
@@ -541,7 +565,7 @@ paths:
                 domain_id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
                 url: "https://brand.example/products/welcome"
                 gs1:
-                  gtin: "03512345678900"
+                  gtin: "03512345678907"
                   batch: "LOT42"
               settings:
                 redundancy: "M"
@@ -941,6 +965,1310 @@ paths:
               schema: { type: string, format: binary }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+
+  /domains/{domain_id}:
+    parameters:
+      - name: domain_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Domain Names]
+      summary: Retrieve a domain name
+      description: The domain and the DNS entry it expects. `dns_entry_type` is always `CNAME`.
+      operationId: getDomain
+      responses:
+        '200':
+          description: The domain.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DomainDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Domain Names]
+      summary: Share a domain name
+      description: |
+        Replaces the domain's sharing lists. Both arrays are absolute — whatever
+        you send becomes the new set, and an omitted or empty array clears it.
+      operationId: updateDomain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                users_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: Users the domain is shared with.
+                orgs_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: Organisations the domain is shared with.
+                is_shared_with_orgs: { type: boolean }
+            example: { users_ids: [], orgs_ids: ["6b8e573e-f5ca-4402-b300-3641ee9484c0"], is_shared_with_orgs: true }
+      responses:
+        '200':
+          description: Sharing updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Domain' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Domain Names]
+      summary: Delete a domain name
+      description: |
+        QR Codes still pointing at this domain keep their short URL but stop
+        resolving on it. Delete the domain at your registrar too.
+      operationId: deleteDomain
+      responses:
+        '200':
+          description: Domain deleted.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /domains/{domain_id}/config:
+    parameters:
+      - name: domain_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Domain Names]
+      summary: Retrieve a domain's DNS configuration
+      description: |
+        The DNS records to create at your registrar, plus the live status of the
+        domain. An `APEX` domain expects one `A` record per regional edge IP; a
+        `SUBDOMAIN` expects a single `CNAME`.
+
+        `status` is `UNKNOWN` when the live check is unavailable; the `records`
+        are still correct in that case.
+      operationId: getDomainConfig
+      responses:
+        '200':
+          description: The DNS configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DomainConfig' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Domain Names]
+      summary: Set a domain's kind and region
+      description: |
+        Both values are matched case-insensitively. `region: all` expands to
+        every edge region, which is echoed back in `cdn_regions`.
+
+        Changing these values changes the DNS records the domain expects —
+        re-read the configuration afterwards and update your registrar.
+      operationId: updateDomainConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, region]
+              properties:
+                type: { type: string, enum: [APEX, SUBDOMAIN] }
+                region: { type: string, enum: [eu, na, all] }
+            example: { type: "SUBDOMAIN", region: "eu" }
+      responses:
+        '200':
+          description: Configuration updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain_id: { type: string, format: uuid }
+                  type: { type: string, enum: [APEX, SUBDOMAIN] }
+                  region: { type: string, enum: [eu, na, all] }
+                  cdn_regions:
+                    type: array
+                    items: { type: string, enum: [eu, na] }
+                    description: The region tokens actually persisted.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /vcards:
+    get:
+      tags: [vCards]
+      summary: List vCards
+      operationId: listVCards
+      responses:
+        '200':
+          description: Array of vCards owned by the account.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/VCard' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [vCards]
+      summary: Create a vCard
+      description: |
+        Creates a vCard and the QR Code that points at it. Consumes one vCard
+        credit; the credit is refunded if creation fails.
+
+        `design` accepts the same object as `POST /qrcode`. Omit it to fall back
+        to the account's default design.
+      operationId: createVCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri, description: Destination the vCard resolves to. }
+                label: { type: string }
+                design: { $ref: '#/components/schemas/QRSettings' }
+            example: { url: "https://unitag.io/contact/jane", label: "Jane Doe — business card" }
+      responses:
+        '200':
+          description: vCard created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vcard: { $ref: '#/components/schemas/VCard' }
+                  qr_code: { $ref: '#/components/schemas/VCardQRCode' }
+                  qr_code_img_url: { type: string, format: uri }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Insufficient vCard credits.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /labels:
+    get:
+      tags: [Labels]
+      summary: List labels
+      description: Every label visible to the account, including those owned by other members of the organisation.
+      operationId: listLabels
+      responses:
+        '200':
+          description: Array of labels.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Label' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Labels]
+      summary: Create a label
+      operationId: createLabel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string, description: "CSS colour, e.g. #2B7FFF." }
+                group_uuid: { type: string, format: uuid, description: Group to file the label under. Omit to leave it ungrouped. }
+            example: { name: "Summer 2026", color: "#2B7FFF" }
+      responses:
+        '200':
+          description: Label created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels:
+                    type: array
+                    items: { $ref: '#/components/schemas/Label' }
+                    description: Always a single-element array holding the created label.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /labels/count:
+    post:
+      tags: [Labels]
+      summary: Count QR Codes per label
+      description: |
+        Returns the number of QR Codes carrying each of the requested labels.
+        Labels with no QR Codes, and labels the account cannot see, are absent
+        from `counts` rather than reported as zero.
+      operationId: countLabelQRCodes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label_uuids]
+              properties:
+                label_uuids:
+                  type: array
+                  items: { type: string, format: uuid }
+            example: { label_uuids: ["6b8e573e-f5ca-4402-b300-3641ee9484c0"] }
+      responses:
+        '200':
+          description: Counts keyed by label UUID.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  counts:
+                    type: object
+                    additionalProperties: { type: integer, format: int64 }
+                    example: { "6b8e573e-f5ca-4402-b300-3641ee9484c0": 42 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /labels/{label_id}:
+    parameters:
+      - name: label_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Labels]
+      summary: Retrieve a label
+      description: Returns an array so the shape matches `GET /labels`; it holds at most one label.
+      operationId: getLabel
+      responses:
+        '200':
+          description: The label.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Label' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Labels]
+      summary: Update a label
+      description: |
+        `group_uuid` is tri-state: omit it to leave the grouping untouched, send
+        a UUID to move the label, or send `""` to remove it from its group.
+      operationId: updateLabel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                color: { type: string }
+                group_uuid: { type: [string, "null"] }
+            example: { name: "Summer 2026 — EU", color: "#F97316" }
+      responses:
+        '200':
+          description: Label updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels:
+                    type: array
+                    items: { $ref: '#/components/schemas/Label' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Labels]
+      summary: Delete a label
+      description: The label is removed from every QR Code carrying it. The QR Codes themselves are untouched.
+      operationId: deleteLabel
+      responses:
+        '204':
+          description: Label deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /groups:
+    get:
+      tags: [Groups]
+      summary: List label groups
+      operationId: listGroups
+      responses:
+        '200':
+          description: Array of groups, each with its labels.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Group' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Groups]
+      summary: Create a label group
+      description: The group is created empty. Add labels to it with `PUT /groups/{group_id}` or `PUT /labels/{label_id}`.
+      operationId: createGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+            example: { name: "Regions", description: "One label per sales region" }
+      responses:
+        '200':
+          description: Group created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /groups/{group_id}:
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Groups]
+      summary: Retrieve a label group
+      description: Returns an array so the shape matches `GET /groups`; it holds at most one group.
+      operationId: getGroup
+      responses:
+        '200':
+          description: The group.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Group' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Groups]
+      summary: Update a label group
+      description: |
+        `label_uuids` replaces the group's membership when present. An omitted or
+        empty array leaves the current membership alone — to empty a group,
+        clear each label's `group_uuid` instead.
+      operationId: updateGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                label_uuids:
+                  type: array
+                  items: { type: string, format: uuid }
+            example: { name: "Regions", label_uuids: ["6b8e573e-f5ca-4402-b300-3641ee9484c0"] }
+      responses:
+        '200':
+          description: Group updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Groups]
+      summary: Delete a label group
+      description: The labels in the group survive; they simply become ungrouped.
+      operationId: deleteGroup
+      responses:
+        '204':
+          description: Group deleted.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /atlas/batches:
+    get:
+      tags: [Batches]
+      summary: List bulk-import batches
+      description: |
+        Every batch started by the account's organisation, newest first.
+        QR Code modification batches are excluded.
+      operationId: listBatches
+      responses:
+        '200':
+          description: Array of batches.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Batch' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /asset/batch_bundle:
+    get:
+      tags: [Assets]
+      summary: List batch bundles
+      operationId: listBatchBundles
+      responses:
+        '200':
+          description: Array of uploaded batch files.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Asset' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /asset/upload/{asset_type}:
+    post:
+      tags: [Assets]
+      summary: Upload an asset
+      description: |
+        Uploads a file as `multipart/form-data` under the field name `File`, and
+        returns the asset UUID to reference it by — a `logo` or `overlay` UUID
+        goes into a QR Code design, a `batch` UUID into a bulk import.
+
+        The content is validated by its magic bytes, not by the declared
+        `Content-Type`. Accepted types per `asset_type`:
+
+        | `asset_type` | accepted content |
+        |---|---|
+        | `logo`, `overlay` | image formats supported by the designer |
+        | `media`, `document` | media and document formats; deleted automatically after a retention period |
+        | `batch` | `.xlsx` spreadsheets only |
+
+        Uploading the same bytes twice returns the existing asset rather than
+        creating a duplicate.
+      operationId: uploadAsset
+      parameters:
+        - name: asset_type
+          in: path
+          required: true
+          schema: { type: string, enum: [logo, overlay, media, document, batch] }
+        - name: vcard
+          in: query
+          required: false
+          description: Set to `true` to store the file against the account's vCard assets.
+          schema: { type: boolean }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [File]
+              properties:
+                File: { type: string, format: binary }
+      responses:
+        '200':
+          description: Asset stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "created" }
+                  asset_id: { type: string, format: uuid }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /asset/delete/batch_bundle:
+    post:
+      tags: [Assets]
+      summary: Delete a batch bundle
+      operationId: deleteBatchBundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_id]
+              properties:
+                asset_id: { type: string, format: uuid }
+            example: { asset_id: "6b8e573e-f5ca-4402-b300-3641ee9484c0" }
+      responses:
+        '200':
+          description: Batch bundle deleted.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /asset/excavate:
+    post:
+      tags: [Assets]
+      summary: Excavate a logo
+      description: |
+        Clears the area around a logo so it sits in a clean zone when it is
+        placed over a QR Code. Send the image as `multipart/form-data` under the
+        field name `File`; the excavated image comes back in the same format.
+
+        This is a pure image operation — nothing is stored. Upload the result
+        with `POST /asset/upload/logo` if you want to reuse it.
+      operationId: excavateLogo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [File]
+              properties:
+                File: { type: string, format: binary }
+      responses:
+        '200':
+          description: The excavated image.
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/svg+xml:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /user:
+    get:
+      tags: [Account]
+      summary: Retrieve the current account
+      description: The account the API key belongs to — plan, organisation, role and renewal date.
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/vcards_pro/search:
+    post:
+      tags: [Analytics]
+      summary: Retrieve vCard Pro aggregated stats
+      description: |
+        Same request and response shape as `POST /analytics/qrcodes/search`,
+        restricted to vCard Pro assets.
+
+        The time range is fixed to the last hour and any `time_range` you send is
+        ignored — this endpoint answers "what is happening right now".
+      operationId: analyticsVCardsProSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnalyticsRequest' }
+      responses:
+        '200':
+          description: Aggregated statistics.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /analytics/orgs/{org_uuid}/search:
+    post:
+      tags: [Analytics]
+      summary: Retrieve an organisation's aggregated stats
+      description: |
+        Same request and response shape as `POST /analytics/qrcodes/search`,
+        scoped to one organisation.
+
+        Access is checked per organisation. An account with a member-level role
+        is narrowed to its own assets even on this route, so the answer is a
+        subset rather than a `403`.
+      operationId: analyticsOrgSearch
+      parameters:
+        - name: org_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnalyticsRequest' }
+      responses:
+        '200':
+          description: Aggregated statistics.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/owners/{owner_uuid}/search:
+    post:
+      tags: [Analytics]
+      summary: Retrieve one account holder's aggregated stats
+      description: |
+        Same request and response shape as `POST /analytics/qrcodes/search`,
+        scoped to the assets owned by one user of your organisation.
+      operationId: analyticsOwnerSearch
+      parameters:
+        - name: owner_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnalyticsRequest' }
+      responses:
+        '200':
+          description: Aggregated statistics.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /audit/org/{org_uuid}:
+    get:
+      tags: [Audit]
+      summary: List an organisation's audit events
+      description: |
+        Every recorded change made by the organisation's members, newest first.
+        Events are enriched here with the acting user's email, the affected
+        entity's label and the organisation name — the audit store itself holds
+        only identifiers.
+      operationId: listOrgAuditEvents
+      parameters:
+        - name: org_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditSourceApp'
+        - $ref: '#/components/parameters/AuditPage'
+        - $ref: '#/components/parameters/AuditPerPage'
+      responses:
+        '200':
+          description: A page of audit events.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /audit/user/{user_uuid}:
+    get:
+      tags: [Audit]
+      summary: List one user's audit events
+      operationId: listUserAuditEvents
+      parameters:
+        - name: user_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditSourceApp'
+        - $ref: '#/components/parameters/AuditPage'
+        - $ref: '#/components/parameters/AuditPerPage'
+      responses:
+        '200':
+          description: A page of audit events.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /audit/entity/{entity_uuid}:
+    get:
+      tags: [Audit]
+      summary: List one entity's audit events
+      description: The change history of a single QR Code or packaging object, identified by its UUID.
+      operationId: listEntityAuditEvents
+      parameters:
+        - name: entity_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditSourceApp'
+        - $ref: '#/components/parameters/AuditPage'
+        - $ref: '#/components/parameters/AuditPerPage'
+      responses:
+        '200':
+          description: A page of audit events.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /audit/org/{org_uuid}/export:
+    post:
+      tags: [Audit]
+      summary: Export an organisation's audit events
+      operationId: exportOrgAuditEvents
+      parameters:
+        - name: org_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuditExportRequest' }
+      responses:
+        '200':
+          description: |
+            The CSV file, or `{"message":"ok"}` when `detached` was `true` — in
+            which case the file is emailed to `receiver_email` instead.
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                type: object
+                properties: { message: { type: string, example: "ok" } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /audit/user/{user_uuid}/export:
+    post:
+      tags: [Audit]
+      summary: Export one user's audit events
+      operationId: exportUserAuditEvents
+      parameters:
+        - name: user_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuditExportRequest' }
+      responses:
+        '200':
+          description: The CSV file, or `{"message":"ok"}` for a detached export.
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                type: object
+                properties: { message: { type: string, example: "ok" } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /audit/entity/{entity_uuid}/export:
+    post:
+      tags: [Audit]
+      summary: Export one entity's audit events
+      operationId: exportEntityAuditEvents
+      parameters:
+        - name: entity_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuditExportRequest' }
+      responses:
+        '200':
+          description: The CSV file, or `{"message":"ok"}` for a detached export.
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                type: object
+                properties: { message: { type: string, example: "ok" } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /analytics/bi/org/{org_uuid}/scorecard:
+    get:
+      tags: [Business Intelligence]
+      summary: Organisation scorecard
+      description: |
+        The headline numbers for an organisation over a window: total scans,
+        unique visitors, mobile and bot share, the per-QR-Code scan
+        distribution, and the top countries.
+      operationId: getBIScorecard
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: The scorecard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BIScorecard' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/drivers:
+    get:
+      tags: [Business Intelligence]
+      summary: What drives an organisation's scans
+      description: |
+        For each dimension (device, country, referrer and so on), the values
+        that are statistically over-represented in this organisation's traffic
+        compared with the background population.
+      operationId: getBIDrivers
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: Significant values per dimension.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BIDrivers' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/campaigns:
+    get:
+      tags: [Business Intelligence]
+      summary: Scans per campaign
+      operationId: getBICampaigns
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: One row per campaign.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  campaigns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        campaign_uuid: { type: string, format: uuid }
+                        name: { type: string }
+                        qr_count: { type: integer }
+                        scans: { type: integer, format: int64 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/campaign/{campaign_uuid}:
+    get:
+      tags: [Business Intelligence]
+      summary: One campaign's scorecard and drivers
+      operationId: getBICampaignDetail
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - name: campaign_uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: The campaign's scorecard and drivers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scorecard: { $ref: '#/components/schemas/BIScorecard' }
+                  drivers: { $ref: '#/components/schemas/BIDrivers' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/content-insights:
+    get:
+      tags: [Business Intelligence]
+      summary: Scans by content category, audience and language
+      description: |
+        Only QR Codes whose content has been classified are counted;
+        `coverage_pct` says how much of the estate that is.
+      operationId: getBIContentInsights
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: Content breakdowns.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  qr_total: { type: integer }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  analyzed_qrs: { type: integer }
+                  coverage_pct: { type: number, format: double }
+                  by_category: { type: array, items: { $ref: '#/components/schemas/BILabeledScans' } }
+                  by_audience: { type: array, items: { $ref: '#/components/schemas/BILabeledScans' } }
+                  by_language: { type: array, items: { $ref: '#/components/schemas/BILabeledScans' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/timeline:
+    get:
+      tags: [Business Intelligence]
+      summary: Scans over time
+      description: A scan series over the window, plus the day-of-week and hour-of-day profiles and the peak day.
+      operationId: getBITimeline
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+        - name: interval
+          in: query
+          required: false
+          description: Bucket size for the series. Defaults to a size chosen from the window length.
+          schema: { type: string, example: "1d" }
+      responses:
+        '200':
+          description: The timeline.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  qr_total: { type: integer }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  interval: { type: string }
+                  total_scans: { type: integer, format: int64 }
+                  growth_pct: { type: number, format: double }
+                  peak: { $ref: '#/components/schemas/BITimePoint' }
+                  series: { type: array, items: { $ref: '#/components/schemas/BITimePoint' } }
+                  by_day_of_week:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        weekday: { type: string }
+                        scans: { type: integer, format: int64 }
+                  by_hour_of_day:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hour: { type: integer, minimum: 0, maximum: 23 }
+                        scans: { type: integer, format: int64 }
+                  note: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/geo:
+    get:
+      tags: [Business Intelligence]
+      summary: Where scans come from
+      description: |
+        `concentration_index` is a 0–1 measure of how concentrated the traffic
+        is: near 1 means nearly all scans come from one country.
+      operationId: getBIGeo
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: Geographic breakdown.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  qr_total: { type: integer }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  total_scans: { type: integer, format: int64 }
+                  distinct_countries: { type: integer }
+                  concentration_index: { type: number, format: double }
+                  europe_share_pct: { type: number, format: double }
+                  top_countries: { type: array, items: { $ref: '#/components/schemas/BILabeledCount' } }
+                  top_cities: { type: array, items: { $ref: '#/components/schemas/BILabeledCount' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/visitors:
+    get:
+      tags: [Business Intelligence]
+      summary: Visitor behaviour
+      description: |
+        New versus returning visitors and how much each one scans. Visitor
+        counts are approximate on large estates; `sampled` says when they were
+        computed from a sample.
+      operationId: getBIVisitors
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: Visitor metrics.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  qr_total: { type: integer }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  total_scans: { type: integer, format: int64 }
+                  unique_visitors: { type: integer, format: int64 }
+                  repeat_scan_ratio: { type: number, format: double }
+                  new_visitors: { type: integer }
+                  returning_visitors: { type: integer }
+                  returning_share_pct: { type: number, format: double }
+                  avg_scans_per_visitor: { type: number, format: double }
+                  max_scans_per_visitor: { type: integer, format: int64 }
+                  avg_qrs_per_visitor: { type: number, format: double }
+                  sampled: { type: boolean }
+                  note: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/outliers:
+    get:
+      tags: [Business Intelligence]
+      summary: Over- and under-performing QR Codes
+      description: |
+        QR Codes whose scan count is far from the estate mean. `stars` are the
+        positive outliers, `laggards` the negative ones; `z_score` is the
+        distance from the mean in standard deviations.
+      operationId: getBIOutliers
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: Outlying QR Codes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  qr_total: { type: integer }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  scanned_qrs: { type: integer }
+                  mean_scans_per_qr: { type: number, format: double }
+                  std_deviation: { type: number, format: double }
+                  stars: { type: array, items: { $ref: '#/components/schemas/BIQROutlier' } }
+                  laggards: { type: array, items: { $ref: '#/components/schemas/BIQROutlier' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/traffic-quality:
+    get:
+      tags: [Business Intelligence]
+      summary: Bot share and traffic anomalies
+      description: |
+        `raw_scans` splits into `human_scans` and `bot_scans`. Every other
+        analytics endpoint reports human scans only, so `raw_scans` here will be
+        the larger number.
+      operationId: getBITrafficQuality
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: Traffic quality metrics.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  qr_total: { type: integer }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  raw_scans: { type: integer, format: int64 }
+                  human_scans: { type: integer, format: int64 }
+                  bot_scans: { type: integer, format: int64 }
+                  bot_share_pct: { type: number, format: double }
+                  unique_visitors: { type: integer, format: int64 }
+                  repeat_scan_ratio: { type: number, format: double }
+                  suspicious_days:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string }
+                        scans: { type: integer, format: int64 }
+                        z_score: { type: number, format: double }
+                  top_bot_qrs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string, description: QR Code short URL or UUID. }
+                        label: { type: string }
+                        scans: { type: integer, format: int64 }
+                        bot_share_pct: { type: number, format: double }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/risk-exposure:
+    get:
+      tags: [Business Intelligence]
+      summary: QR Codes flagged as risky
+      description: |
+        QR Codes whose traffic suggests abuse, ranked by `exposure` — how many
+        scans are affected weighted by confidence.
+      operationId: getBIRiskExposure
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+      responses:
+        '200':
+          description: Flagged QR Codes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  qr_total: { type: integer }
+                  truncated: { $ref: '#/components/schemas/BITruncated' }
+                  flagged_qrs: { type: integer }
+                  exposed_scans: { type: integer, format: int64 }
+                  total_exposure: { type: number, format: double }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        qr_uuid: { type: string, format: uuid }
+                        label: { type: string }
+                        short_url: { type: string }
+                        full_url: { type: string }
+                        scans: { type: integer, format: int64 }
+                        fraud_confidence: { type: integer, minimum: 0, maximum: 100 }
+                        reason: { type: string }
+                        exposure: { type: number, format: double }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /analytics/bi/org/{org_uuid}/sector-benchmark:
+    get:
+      tags: [Business Intelligence]
+      summary: Compare an organisation against its sector
+      description: |
+        Compares the organisation's scans per QR Code against a cohort of
+        similar organisations. `min_cohort_met` is `false` when the cohort was
+        too small to be meaningful — read the figures as indicative only.
+      operationId: getBISectorBenchmark
+      parameters:
+        - $ref: '#/components/parameters/BIOrgUuid'
+        - $ref: '#/components/parameters/BIFrom'
+        - $ref: '#/components/parameters/BITo'
+        - name: sector
+          in: query
+          required: false
+          description: Override the cohort's sector. Defaults to the organisation's own detected sector.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The benchmark.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_uuid: { type: string, format: uuid }
+                  org_name: { type: string }
+                  from: { type: string }
+                  to: { type: string }
+                  sector: { type: string }
+                  sector_source: { type: string, description: How the sector was determined. }
+                  org_analyzed_qrs: { type: integer }
+                  cohort_qrs: { type: integer }
+                  cohort_orgs: { type: integer }
+                  cohort_sampled: { type: boolean }
+                  min_cohort_met: { type: boolean }
+                  scans_per_qr:
+                    type: object
+                    properties:
+                      org_median: { type: number, format: double }
+                      cohort_median: { type: number, format: double }
+                      cohort_top_quartile: { type: number, format: double }
+                      delta_vs_median_pct: { type: number, format: double }
+                      delta_vs_top_quartile_pct: { type: number, format: double }
+                  drivers:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: { $ref: '#/components/schemas/BISigBucket' }
+                  note: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -962,6 +2290,61 @@ components:
       description: UUID of the QR Code.
       schema: { type: string, format: uuid }
 
+    AuditFrom:
+      name: from
+      in: query
+      required: false
+      description: Start of the window, ISO 8601. Omit for the store's default lookback.
+      schema: { type: string, example: "2026-08-01T00:00:00Z" }
+    AuditTo:
+      name: to
+      in: query
+      required: false
+      description: End of the window, ISO 8601.
+      schema: { type: string, example: "2026-09-01T00:00:00Z" }
+    AuditAction:
+      name: action
+      in: query
+      required: false
+      description: Restrict to a single action.
+      schema: { type: string, enum: [create, update, delete] }
+    AuditSourceApp:
+      name: source_app
+      in: query
+      required: false
+      description: Restrict to events emitted by one application.
+      schema: { type: string, example: "packaging" }
+    AuditPage:
+      name: page
+      in: query
+      required: false
+      description: 1-based page number.
+      schema: { type: integer, minimum: 1, default: 1 }
+    AuditPerPage:
+      name: per_page
+      in: query
+      required: false
+      description: Events per page.
+      schema: { type: integer, minimum: 1, default: 10 }
+    BIOrgUuid:
+      name: org_uuid
+      in: path
+      required: true
+      description: Organisation to report on. You must belong to it, or to its parent with a privileged role.
+      schema: { type: string, format: uuid }
+    BIFrom:
+      name: from
+      in: query
+      required: false
+      description: Start of the window, ISO 8601. Omit for the default lookback.
+      schema: { type: string, example: "2026-08-01T00:00:00Z" }
+    BITo:
+      name: to
+      in: query
+      required: false
+      description: End of the window, ISO 8601.
+      schema: { type: string, example: "2026-09-01T00:00:00Z" }
+
   responses:
     BadRequest:
       description: Invalid request format.
@@ -969,7 +2352,10 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Unauthorized:
-      description: Bad or missing API key.
+      description: |
+        Bad or missing API key — or a valid key whose account does not hold the
+        role the endpoint requires. Audit and Business Intelligence endpoints
+        answer `401` rather than `403` when the role is insufficient.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1368,7 +2754,7 @@ components:
               value:
                 type: string
                 description: The identifier value. For AI `01` this must be a 14-digit GTIN with a valid mod-10 check digit; a 13-digit value is left-padded automatically.
-                example: "03512345678900"
+                example: "03512345678907"
               key_identifiers:
                 type: array
                 description: Key qualifiers, emitted in the standard order 22 → 10 → 21 regardless of the order supplied here.
@@ -1397,7 +2783,7 @@ components:
               short_url:
                 type: string
                 description: The GS1 Digital Link path, without scheme or host.
-                example: "/01/03512345678900/10/LOT42?17=261231"
+                example: "/01/03512345678907/10/LOT42?17=261231"
 
     GS1QRCodeRequest:
       type: object
@@ -1418,12 +2804,12 @@ components:
                 contains `/01/` it takes precedence over the `gs1` object and is
                 parsed as the canonical source. **This is the only way to supply
                 data attributes** (e.g. `?17=261231`) on this endpoint.
-              example: "/01/03512345678900/10/LOT42?17=261231"
+              example: "/01/03512345678907/10/LOT42?17=261231"
             gs1:
               type: object
               description: The GS1 identifier tuple. Ignored when `short_url` contains `/01/`.
               properties:
-                gtin: { type: string, description: 14-digit GTIN with a valid mod-10 check digit., example: "03512345678900" }
+                gtin: { type: string, description: 14-digit GTIN with a valid mod-10 check digit., example: "03512345678907" }
                 cpv: { type: string, description: "Consumer product variant (AI 22).", example: "" }
                 batch: { type: string, description: "Batch / lot (AI 10).", example: "LOT42" }
                 serial: { type: string, description: "Serial (AI 21).", example: "" }
@@ -1499,9 +2885,8 @@ components:
         destination_url: { type: string, format: uri }
         position: { type: integer }
         fired_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
           description: Null until the rule has been applied.
 
     ScheduleList:
@@ -1624,3 +3009,283 @@ components:
               country_iso: { type: string }
               city_iso: { type: string }
               model: { type: string, description: Device model. }
+
+    DomainDetail:
+      type: object
+      description: A single domain and the DNS entry it expects.
+      properties:
+        domain_uuid: { type: string, format: uuid }
+        domain_name: { type: string, example: "qr.example.org" }
+        dns_entry_type:
+          type: string
+          enum: [CNAME]
+          description: >-
+            Always `CNAME`. Use the domain configuration endpoint for APEX
+            domains, which need `A` records instead.
+        dns_entry: { type: string, description: The value to point the record at. }
+
+    DomainConfig:
+      type: object
+      description: The DNS records a domain expects, and its live status.
+      properties:
+        domain_id: { type: string, format: uuid }
+        domain_name: { type: string }
+        domain_type: { type: string, enum: [APEX, SUBDOMAIN] }
+        record_type: { type: string, enum: [A, CNAME], description: "`A` for APEX domains, `CNAME` for subdomains." }
+        records:
+          type: array
+          items: { type: string }
+          description: Every value to create a `record_type` record for. Empty until the domain is configured.
+        registrar_family: { type: string, description: "Detected registrar, used to pick a setup guide. `unknown` when it could not be determined." }
+        status: { type: string, description: "Live DNS check result. `UNKNOWN` when the check is unavailable — the records are still correct." }
+        activated: { type: boolean }
+        ssl_activated: { type: boolean }
+
+    VCard:
+      type: object
+      properties:
+        vcard_id: { type: string, format: uuid }
+        qrcode_uuid: { type: string, format: uuid }
+        qrcode_template_id: { type: string }
+        url: { type: string, format: uri }
+        design: { type: string, description: Serialised design document. }
+        data: { type: string, description: Serialised vCard content. }
+        activated: { type: boolean }
+        deactivation_reason: { type: string }
+
+    VCardQRCode:
+      type: object
+      description: |
+        The QR Code created alongside a vCard. Field names differ from
+        `QRCodeDetail` — this is the stored record, not the read model.
+      properties:
+        uuid: { type: string, format: uuid }
+        label: { type: string }
+        type: { type: string }
+        resolution_type: { type: string, enum: [dynamic, dynamic-pro, static] }
+        short_url: { type: string }
+        full_url: { type: string }
+        data: { type: string }
+        activated: { type: boolean }
+        creation_date: { type: string, format: date-time }
+        update_date: { type: string, format: date-time }
+        labels: { type: array, items: { $ref: '#/components/schemas/Label' } }
+
+    Label:
+      type: object
+      description: |
+        A label. Labels are shared across the organisation, so a label created
+        by one member is visible and usable by the others.
+      properties:
+        ID: { type: integer, description: Internal numeric id. Address labels by `uuid`. }
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string, example: "#2B7FFF" }
+        group: { $ref: '#/components/schemas/GroupSummary' }
+        CreatedAt: { type: string, format: date-time }
+        UpdatedAt: { type: string, format: date-time }
+
+    GroupSummary:
+      type: object
+      description: The group a label belongs to. Absent when the label is ungrouped.
+      properties:
+        ID: { type: integer }
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+
+    Group:
+      type: object
+      description: A named set of labels.
+      properties:
+        ID: { type: integer, description: Internal numeric id. Address groups by `uuid`. }
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        labels: { type: array, items: { $ref: '#/components/schemas/Label' } }
+        CreatedAt: { type: string, format: date-time }
+        UpdatedAt: { type: string, format: date-time }
+
+    Batch:
+      type: object
+      description: One bulk-import run.
+      properties:
+        id: { type: integer }
+        batch_id: { type: string, format: uuid }
+        state: { type: string, description: "Where the run got to, e.g. `pending`, `done`, `failed`." }
+        type: { type: string, description: What the batch creates. }
+        number_of_assets: { type: integer, description: Rows the source file held. }
+        file_uuid: { type: string, format: uuid, description: The uploaded spreadsheet this run came from. }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, description: Zero-valued while the run is still going. }
+        creator_email: { type: string, format: email, description: Who started the run. Empty when it cannot be resolved. }
+        summary: { type: object, description: Per-run counters and errors. Shape depends on `type`. }
+
+    Asset:
+      type: object
+      description: An uploaded file.
+      properties:
+        ID: { type: integer }
+        UUID: { type: string, format: uuid }
+        Name: { type: string }
+        Type: { type: string }
+        ContentType: { type: string }
+        CreatedAt: { type: string, format: date-time }
+        UpdatedAt: { type: string, format: date-time }
+
+    Account:
+      type: object
+      description: The account an API key belongs to.
+      properties:
+        id: { type: integer }
+        uuid: { type: string, format: uuid }
+        email: { type: string, format: email }
+        org: { type: string, format: uuid, description: UUID of the account's organisation. }
+        org_name: { type: string }
+        organisation_role: { type: string, description: The account's role inside its organisation. }
+        is_root_account: { type: boolean }
+        account_type: { type: string, description: The subscribed plan. }
+        renewal_date: { type: [string, "null"], format: date-time }
+        activated: { type: boolean }
+        deactivation_reason: { type: string }
+        legacy_id: { type: integer, format: int64 }
+        legacy_version: { type: string }
+
+    AuditEventPage:
+      type: object
+      description: A page of audit events.
+      properties:
+        total: { type: integer, format: int64, description: "Total matching events, not the size of this page." }
+        page: { type: integer }
+        per_page: { type: integer }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
+
+    AuditEvent:
+      type: object
+      description: One recorded change.
+      properties:
+        '@timestamp': { type: string, format: date-time }
+        action: { type: string, enum: [create, update, delete] }
+        entity_type: { type: string, description: "What changed, e.g. `qrcode`, `packaging_product`." }
+        entity_uuid: { type: string, format: uuid }
+        entity_label: { type: string, description: "Human-readable name of the entity, resolved when the event is read." }
+        user_uuid: { type: string, format: uuid }
+        user_email: { type: string, format: email }
+        org_uuid: { type: string, format: uuid }
+        org_name: { type: string }
+        changes:
+          type: array
+          description: Empty for `create` and `delete`.
+          items:
+            type: object
+            properties:
+              field: { type: string, description: "Dotted path of the changed field, e.g. `design.template_id`." }
+              old_value: { description: Any JSON value. }
+              new_value: { description: Any JSON value. }
+
+    AuditExportRequest:
+      type: object
+      description: |
+        Set `detached` for large exports: the file is built in the background
+        and emailed instead of being returned inline.
+      properties:
+        from: { type: string, description: "Start of the window, ISO 8601." }
+        to: { type: string, description: "End of the window, ISO 8601." }
+        action: { type: string, enum: [create, update, delete] }
+        source_app: { type: string }
+        detached: { type: boolean, default: false }
+        receiver_email: { type: string, format: email, description: Required when `detached` is `true`. }
+      example: { from: "2026-08-01T00:00:00Z", to: "2026-09-01T00:00:00Z", detached: false }
+
+    BITruncated:
+      type: boolean
+      description: |
+        `true` when the estate was too large to analyse in full and the figures
+        come from a subset. Treat the numbers as indicative, not exact.
+
+    BIStatBlock:
+      type: object
+      properties:
+        count: { type: integer, format: int64 }
+        avg: { type: number, format: double }
+        std_deviation: { type: number, format: double }
+        min: { type: number, format: double }
+        max: { type: number, format: double }
+
+    BILabeledCount:
+      type: object
+      properties:
+        key: { type: string }
+        doc_count: { type: integer, format: int64 }
+
+    BILabeledScans:
+      type: object
+      properties:
+        key: { type: string }
+        scans: { type: integer, format: int64 }
+        qr_count: { type: integer }
+
+    BISigBucket:
+      type: object
+      description: One statistically significant value within a dimension.
+      properties:
+        key: { type: string }
+        doc_count: { type: integer, format: int64, description: Occurrences in this organisation's traffic. }
+        bg_count: { type: integer, format: int64, description: Occurrences in the background population. }
+        score: { type: number, format: double, description: How over-represented the value is. Higher is more significant. }
+
+    BITimePoint:
+      type: object
+      properties:
+        timestamp: { type: integer, format: int64, description: Epoch ms. }
+        date: { type: string }
+        scans: { type: integer, format: int64 }
+
+    BIQROutlier:
+      type: object
+      properties:
+        key: { type: string, description: QR Code short URL or UUID. }
+        label: { type: string }
+        short_url: { type: string }
+        full_url: { type: string }
+        scans: { type: integer, format: int64 }
+        z_score: { type: number, format: double }
+        reason: { type: string }
+
+    BIScorecard:
+      type: object
+      properties:
+        org_uuid: { type: string, format: uuid }
+        org_name: { type: string }
+        campaign_uuid: { type: string, format: uuid }
+        campaign_name: { type: string }
+        from: { type: string }
+        to: { type: string }
+        qr_total: { type: integer }
+        truncated: { $ref: '#/components/schemas/BITruncated' }
+        total_scans: { type: integer, format: int64 }
+        unique_visitors: { type: integer, format: int64 }
+        mobile_share_pct: { type: number, format: double }
+        bot_share_pct: { type: number, format: double }
+        scans_per_qr: { $ref: '#/components/schemas/BIStatBlock' }
+        top_countries: { type: array, items: { $ref: '#/components/schemas/BILabeledCount' } }
+
+    BIDrivers:
+      type: object
+      properties:
+        org_uuid: { type: string, format: uuid }
+        org_name: { type: string }
+        campaign_uuid: { type: string, format: uuid }
+        campaign_name: { type: string }
+        from: { type: string }
+        to: { type: string }
+        qr_total: { type: integer }
+        truncated: { $ref: '#/components/schemas/BITruncated' }
+        dimensions:
+          type: object
+          description: Keyed by dimension name; each value is that dimension's significant buckets.
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/BISigBucket' }
