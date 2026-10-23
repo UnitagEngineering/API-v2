@@ -4,7 +4,8 @@ info:
   version: "2.0.0"
   description: |
     Unitag provides a simple yet powerful REST API to integrate QR Code generation,
-    management and analytics into your application.
+    management and analytics into your application. Short links share the QR Code
+    model: see the **Links** tag.
 
     ## Authentication
     Pass your API key in the `X-Unitag-ApiKey` header on every request. Keys are
@@ -37,6 +38,16 @@ security:
 tags:
   - name: QR Codes
     description: Create, preview, retrieve, update, download and delete QR Codes.
+  - name: Links
+    description: |
+      Branded short links without a QR Code design — Unitag's URL shortener.
+      A link is stored like a Dynamic / Dynamic Pro QR Code (`type: link`),
+      resolves through the same edge network and reports the same analytics,
+      so every endpoint that takes a `qrcode_id` — filters, schedules, labels,
+      campaigns, analytics, audit — also accepts a link id. Every Dynamic
+      QR Code of type `url` already exposes a short link; `GET /links/paginated`
+      lists both. Links consume no credit. A short URL never changes once
+      issued.
   - name: Templates
     description: Save and reuse QR Code designs.
   - name: Filters
@@ -55,11 +66,11 @@ tags:
       Served on a dedicated host; authenticated with the same `X-Unitag-ApiKey`
       header as the rest of this API.
   - name: Domain Names
-    description: Use your own domain with Dynamic Pro QR Codes (Gold plan and up).
+    description: Use your own domain with Dynamic Pro QR Codes and short links (Gold plan and up).
   - name: Campaigns
     description: Organise QR Codes into campaigns and sub-campaigns.
   - name: Analytics
-    description: Aggregated stats, visit records and exports for your QR Codes.
+    description: Aggregated stats, visit records and exports for your QR Codes and short links (a click is a visit).
   - name: Business Intelligence
     description: |
       Organisation-wide reporting: scorecards, what drives scans, timelines,
@@ -326,6 +337,216 @@ paths:
               schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /links:
+    post:
+      tags: [Links]
+      summary: Create a short link
+      description: |
+        Creates a short link on the account of the API key: a destination, a
+        short URL and a label, no design. The response has the shape of a
+        QR Code list record with `type: link`.
+
+        No credit is consumed. `resolution` is `dynamic` (default) or
+        `dynamic-pro` (needs `domain_id`); `static` is refused — a static code
+        is the destination itself, there is nothing to shorten.
+        `preferred_short_url` must be unique on the domain: a taken value
+        answers `400` with `error_code: SHORT_URL_TAKEN`.
+      operationId: createLink
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LinkRequest' }
+            examples:
+              dynamic:
+                summary: Plain short link on opn.to
+                value: { url: "https://example.com/landing?utm_source=print", label: "Spring campaign flyer" }
+              dynamicProWithSlug:
+                summary: Branded domain and custom path
+                value: { url: "https://example.com/landing", resolution: "dynamic-pro", domain_id: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6", preferred_short_url: "spring24" }
+              withCampaignAndLabels:
+                summary: Filed under a campaign with labels
+                value: { url: "https://example.com/landing", label: "Newsletter banner", campaign: { uuid: "fd3180e2-e5e2-45ca-a8e5-b737627132bc" }, labels: ["0b0e9e2a-6a0e-4f3e-9b1a-1c2d3e4f5a6b"] }
+      responses:
+        '201':
+          description: Short link created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Link' }
+              example: { uuid: "6b8e573e-f5ca-4402-b300-3641ee9484c0", type: "link", label: "Spring campaign flyer", short_url: "https://opn.to/a/x7Yk2", full_url: "https://example.com/landing?utm_source=print", resolution_type: "dynamic", activated: true, creation_date: "2026-10-23T14:02:11Z", update_date: "2026-10-23T14:02:11Z" }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /links/paginated:
+    get:
+      tags: [Links]
+      summary: Retrieve all short links (paginated)
+      description: |
+        Lists the short links of the account: the standalone links (`type:
+        link`) and the short links behind Dynamic URL QR Codes (`type: qrcode`,
+        never `static`). Same filters, sorting and paging as `GET
+        /qrcodes/paginated`, plus `filterLinkType`.
+      operationId: listLinks
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - name: maxRows
+          in: query
+          description: Page size. Any positive value is accepted; omitted means 5.
+          schema: { type: integer, default: 5, minimum: 1 }
+        - name: sortField
+          in: query
+          schema: { type: string, enum: [Label, Destination, Campaign, Organisation, creation_date, short_url], default: creation_date }
+        - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - name: filterLinkType
+          in: query
+          description: "`link` for standalone short links only, `qrcode` for the short links of Dynamic URL QR Codes only. Omitted: both."
+          schema: { type: string, enum: [link, qrcode] }
+        - { name: filterLabel, in: query, description: Partial match, schema: { type: string } }
+        - { name: filterDestination, in: query, description: Partial match, schema: { type: string } }
+        - { name: filterShortUrl, in: query, description: Partial match, schema: { type: string } }
+        - { name: filterCampaign, in: query, schema: { type: string, format: uuid } }
+        - { name: filterOrganisation, in: query, schema: { type: string, format: uuid } }
+        - { name: filterDate, in: query, description: "Format dd/mm/yyyy", schema: { type: string } }
+      responses:
+        '200':
+          description: A page of short links, in the QR Code list shape (`type` is `link` or `qrcode`; `resolution_type` is never `static`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QRCodeListPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /links/{qrcode_id}:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    get:
+      tags: [Links]
+      summary: Retrieve a short link
+      description: Same resource as `GET /qrcode/{qrcode_id}`; `design` is the shared default design for a `link`.
+      operationId: getLink
+      responses:
+        '200':
+          description: The short link.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QRCodeDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Links]
+      summary: Delete a short link
+      description: The short URL stops resolving immediately. Nothing is refunded (links consume no credit).
+      operationId: deleteLink
+      responses:
+        '200':
+          description: Short link deleted. The body is JSON `null`.
+          content:
+            application/json:
+              schema: { type: "null" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /links/{qrcode_id}/url:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    put:
+      tags: [Links]
+      summary: Update a short link destination
+      description: Changes where the short URL redirects. The short URL itself never changes.
+      operationId: updateLinkUrl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri, description: The new destination. }
+            example: { url: "https://example.com/summer-offer" }
+      responses:
+        '200':
+          description: Destination updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpdateQRCodeResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /links/{qrcode_id}/label:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    put:
+      tags: [Links]
+      summary: Rename a short link
+      operationId: updateLinkLabel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string }
+            example: { label: "Summer offer" }
+      responses:
+        '200':
+          description: Label updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, example: "updated" } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /links/{qrcode_id}/convert:
+    parameters:
+      - $ref: '#/components/parameters/QRCodeId'
+    post:
+      tags: [Links]
+      summary: Turn a short link into a QR Code
+      description: |
+        Gives the short link a design and makes it a QR Code (`type: qrcode`).
+        It keeps its short URL, its clicks and its analytics and shows up among
+        your QR Codes from then on. Not reversible.
+
+        Consumes one QR Code credit on plans with QR Code credits — the same
+        `403` as `POST /qrcode` when none is left. Without a body the link keeps
+        the default design; pass `settings` to design it in the same call.
+      operationId: convertLinkToQRCode
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings: { $ref: '#/components/schemas/QRSettings' }
+            example:
+              settings:
+                layout: { type: "single_color", color_one: "#158f48", color_background: "#ffffff" }
+                eyes: { type: "simple" }
+                modules: { type: "simple" }
+      responses:
+        '200':
+          description: The QR Code the link became.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QRCodeDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The resource is already a QR Code.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /qrcodes/templates:
     get:
@@ -2432,9 +2653,10 @@ components:
           description: |
             Application that owns the code. Wider than the `QRData.type` enum
             used on creation — observed values include `qrcode`, `packaging`,
-            `vcard`, `wifi`, `document` and `email`.
+            `vcard`, `wifi`, `document`, `email` and `link` (a short link of
+            the URL shortener, see the Links tag).
         resolution_type: { type: string, enum: [dynamic, dynamic-pro, static] }
-        short_url: { type: string, description: The scannable resolution URL. }
+        short_url: { type: string, description: The scannable resolution URL — also the code's short link. Immutable once issued. }
         full_url: { type: string, description: Current destination. }
         owner_email: { type: string }
         activated: { type: boolean }
@@ -2562,7 +2784,7 @@ components:
       type: object
       required: [type, resolution, url]
       properties:
-        type: { type: string, enum: [url, vcard], description: Type of QR Code. }
+        type: { type: string, enum: [url, vcard], description: "Type of QR Code. `link` is reserved for short links created with `POST /links`; sending it here returns 400." }
         resolution: { type: string, enum: [dynamic, dynamic-pro, static], description: Resolution mode. }
         url:
           type: string
@@ -2666,6 +2888,47 @@ components:
             `POST /qrcode/serial`; always empty on `POST /qrcode`, which returns
             the value in `content_url` only.
         qrcode_image_url: { type: string, format: uri, description: QR Code image on the Unitag CDN. }
+
+    LinkRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: >-
+            Destination. `https://` is assumed when the scheme is missing;
+            `javascript:`, `data:` and embedded credentials are rejected with `400`.
+        label: { type: string, description: Defaults to the destination host. }
+        resolution: { type: string, enum: [dynamic, dynamic-pro], default: dynamic, description: "`static` is not allowed for links." }
+        domain_id: { type: string, format: uuid, description: Required when resolution is `dynamic-pro`. See Domain Names. }
+        preferred_short_url:
+          type: string
+          minLength: 3
+          maxLength: 64
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: Custom path segment after `/a/`. Must be unique on the domain; a few reserved words (`api`, `www`, the resolver letters…) are refused.
+        campaign:
+          type: object
+          description: Campaign to associate at creation.
+          properties:
+            uuid: { type: string, format: uuid }
+        labels: { type: array, items: { type: string, format: uuid }, description: Label ids to attach. }
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              name: { type: string }
+
+    Link:
+      description: One short link, in the same shape as a QR Code list record (`QRCodeListRecord`); `type` is `link`.
+      allOf:
+        - $ref: '#/components/schemas/QRCodeListRecord'
+        - type: object
+          properties:
+            type: { type: string, enum: [link, qrcode] }
 
     DownloadSingleRequest:
       type: object

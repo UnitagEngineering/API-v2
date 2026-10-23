@@ -40,6 +40,14 @@ https://api-v2.sandbox.unitag.io
   * [Delete a QR code](#delete-a-qr-code)
   * [Download a QR code](#download-a-qr-code)
   * [Download multiple QR codes](#download-multiple-qr-codes)
+* [Links (URL shortener)](#links-url-shortener)
+  * [Create a short link](#create-a-short-link)
+  * [Retrieve all short links](#retrieve-all-short-links)
+  * [Retrieve a short link](#retrieve-a-short-link)
+  * [Update a short link destination](#update-a-short-link-destination)
+  * [Rename a short link](#rename-a-short-link)
+  * [Delete a short link](#delete-a-short-link)
+  * [Turn a short link into a QR Code](#turn-a-short-link-into-a-qr-code)
 * [Templates](#templates)
   * [Retrieve templates](#retrieve-qr-code-templates)
   * [Create a template](#create-a-template-from-a-qr-code)
@@ -278,7 +286,7 @@ Example:
 
 | field | type | mandatory | description |  
 | --- | --- | --- | --- |  
-| type | string | true | Type of QR Code, one of "url, vcard" |  
+| type | string | true | Type of QR Code, one of "url, vcard" (`link` is reserved for `POST /links` and is refused here) |  
 | resolution | string | true | Resolution of your QR Code, one of "dynamic, dynamic-pro, static" |
 | url | string | true | Final URL to which your QR Code should redirect to upon scanning |
 | domain_id | string | false | Mandatory if resolution type is "dynamic-pro" |
@@ -553,7 +561,7 @@ Example with an **image overlay** (the QR modules are filled with an image — t
 
 | field      | type | mandatory | description                                                     |  
 |------------| --- | --- |-----------------------------------------------------------------|  
-| type       | string | true | Type of QR Code, one of "url, vcard"                            |  
+| type       | string | true | Type of QR Code, one of "url, vcard" (`link` is reserved for `POST /links` and is refused here)                            |  
 | resolution | string | true | Resolution of your QR Code, one of "dynamic, dynamic-pro, static" |
 | domain_id  | string | false | Mandatory if resolution type is "dynamic-pro"                   | 
 | url        | string | true | Final URL to which your QR Code should redirect to upon scanning |
@@ -779,6 +787,146 @@ Example batch download
 **Response**
 
 A compressed archive (zip) containing all your assets
+
+---
+
+## Links (URL shortener)
+
+A short link is a Dynamic / Dynamic Pro QR Code without a design: a destination, a short URL and a label. It is stored with `type: link`, resolves through the same edge network and reports the same analytics, so every endpoint that takes a `qrcode_id` — filters, schedules, labels, campaigns, analytics, audit — also accepts a link id. Links consume no credit. A short URL never changes once issued.
+
+Every Dynamic QR Code of type `url` already exposes a short link; the list endpoint below returns both.
+
+### Create a short link
+
+**HTTP request**
+
+`POST /links`
+
+**Request fields**
+
+Example
+```json
+{
+  "url": "https://example.com/landing?utm_source=print",
+  "label": "Spring campaign flyer",
+  "resolution": "dynamic",
+  "preferred_short_url": "spring24",
+  "campaign": { "uuid": "fd3180e2-e5e2-45ca-a8e5-b737627132bc" },
+  "labels": ["0b0e9e2a-6a0e-4f3e-9b1a-1c2d3e4f5a6b"]
+}
+```
+
+| field | type | mandatory | description |
+|---|---|---|---|
+| url | string | yes | Destination. `https://` is assumed when the scheme is missing; `javascript:`, `data:` and embedded credentials are rejected with 400. |
+| label | string | no | Defaults to the destination host. |
+| resolution | string | no | `dynamic` (default) or `dynamic-pro`. `static` is refused. |
+| domain_id | uuid | when dynamic-pro | One of your domain names (see Domain Names). |
+| preferred_short_url | string | no | Custom path segment after `/a/`: 3–64 characters, `A-Z a-z 0-9 - _`, unique on the domain. A taken value answers 400 with `error_code: SHORT_URL_TAKEN`. |
+| campaign.uuid | uuid | no | Campaign to file the link under. |
+| labels | uuid[] | no | Labels to attach. |
+
+**Response fields**
+
+Status `201`. The body is a QR Code list record with `type: link`:
+
+```json
+{
+  "uuid": "6b8e573e-f5ca-4402-b300-3641ee9484c0",
+  "type": "link",
+  "label": "Spring campaign flyer",
+  "short_url": "https://opn.to/a/spring24",
+  "full_url": "https://example.com/landing?utm_source=print",
+  "resolution_type": "dynamic",
+  "activated": true,
+  "creation_date": "2026-10-23T14:02:11Z",
+  "update_date": "2026-10-23T14:02:11Z"
+}
+```
+
+---
+
+### Retrieve all short links
+
+The standalone short links (`type: link`) and the short links behind your Dynamic URL QR Codes (`type: qrcode`, never static).
+
+**HTTP request**
+
+```GET /links/paginated?page=1&sortField=creation_date&sortOrder=desc&maxRows=5```
+
+Parameters: the same as [Retrieve all QR codes](#retrieve-all-qr-codes), plus
+
+- filterLinkType [`link` for standalone short links only, `qrcode` for the short links of Dynamic URL QR Codes only; omitted: both]
+
+---
+
+### Retrieve a short link
+
+Same resource as [Retrieve a QR code](#retrieve-a-qr-code); `design` is the shared default design for a `link`.
+
+**HTTP request**
+
+```GET /links/<qrcode_id>```
+
+---
+
+### Update a short link destination
+
+Changes where the short URL redirects. The short URL itself never changes.
+
+**HTTP request**
+
+`PUT /links/<qrcode_id>/url`
+
+```json
+{ "url": "https://example.com/summer-offer" }
+```
+
+---
+
+### Rename a short link
+
+**HTTP request**
+
+`PUT /links/<qrcode_id>/label`
+
+```json
+{ "label": "Summer offer" }
+```
+
+---
+
+### Delete a short link
+
+The short URL stops resolving immediately. Nothing is refunded.
+
+**HTTP request**
+
+```DELETE /links/<qrcode_id>```
+
+---
+
+### Turn a short link into a QR Code
+
+Gives the short link a design and makes it a QR Code (`type: qrcode`). It keeps its short URL, its clicks and its analytics and shows up among your QR Codes from then on. Not reversible. Consumes one QR Code credit on plans with QR Code credits — the same 403 as `POST /qrcode` when none is left.
+
+**HTTP request**
+
+`POST /links/<qrcode_id>/convert`
+
+Optional body — without it the link keeps the default design:
+
+```json
+{
+  "settings": {
+    "layout": { "type": "single_color", "color_one": "#158f48", "color_background": "#ffffff" },
+    "eyes": { "type": "simple" },
+    "modules": { "type": "simple" }
+  }
+}
+```
+
+Response: the QR Code, as returned by [Retrieve a QR code](#retrieve-a-qr-code). `409` when the resource is already a QR Code.
 
 ---
 
